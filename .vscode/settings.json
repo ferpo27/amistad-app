@@ -1,0 +1,13 @@
+{
+<<<<<<< HEAD
+    "CodeGPT.apiKey": "OpenAI",
+    "git.ignoreLimitWarning": true
+}
+=======
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit",
+    "source.organizeImports": "explicit",
+    "source.sortMembers": "explicit"
+  }
+}
+>>>>>>> dacc985c8ab2c03662555b586c8ffca3395022d7
