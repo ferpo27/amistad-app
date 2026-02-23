@@ -1,11 +1,10 @@
-// src/theme.tsx
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Appearance, ColorSchemeName } from "react-native";
 import { getThemeMode, setThemeMode, type ThemeMode } from "./storage";
 
 type Theme = {
-  mode: ThemeMode;              // "system" | "light" | "dark"
-  scheme: "light" | "dark";     // el resultado final aplicado
+  mode: ThemeMode;
+  scheme: "light" | "dark";
   setMode: (m: ThemeMode) => Promise<void>;
   colors: {
     bg: string;
@@ -16,6 +15,9 @@ type Theme = {
     primary: string;
     bubbleMe: string;
     bubbleThem: string;
+    fg: string;
+    accent: string;
+    accentSoft: string;
   };
 };
 
@@ -23,10 +25,14 @@ const ThemeContext = createContext<Theme | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<ThemeMode>("system");
-  const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(Appearance.getColorScheme());
+  const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(
+    Appearance.getColorScheme()
+  );
 
   useEffect(() => {
-    const sub = Appearance.addChangeListener(({ colorScheme }) => setSystemScheme(colorScheme));
+    const sub = Appearance.addChangeListener(({ colorScheme }) =>
+      setSystemScheme(colorScheme)
+    );
     return () => sub.remove();
   }, []);
 
@@ -45,15 +51,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const colors = useMemo(() => {
     const dark = scheme === "dark";
+    const fg = dark ? "#FFFFFF" : "#111111";
+    const accent = "#4C8EFF";
+    const accentSoft = "rgba(76,142,255,0.12)";
     return {
       bg: dark ? "#0B0B0E" : "#FFFFFF",
       card: dark ? "#14141A" : "#F6F6F7",
-      text: dark ? "#FFFFFF" : "#111111",
+      text: fg,
       subtext: dark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.65)",
       border: dark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)",
       primary: "#111111",
       bubbleMe: dark ? "#FFFFFF" : "#111111",
       bubbleThem: dark ? "#1B1B22" : "#F1F1F1",
+      fg,
+      accent,
+      accentSoft,
     };
   }, [scheme]);
 
@@ -74,4 +86,9 @@ export function useTheme(): Theme {
   const ctx = useContext(ThemeContext);
   if (!ctx) throw new Error("useTheme must be used inside <ThemeProvider>");
   return ctx;
+}
+
+export function useThemeMode() {
+  const { mode, setMode, colors, scheme } = useTheme();
+  return { mode, setMode, colors, scheme };
 }
