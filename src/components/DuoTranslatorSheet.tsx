@@ -10,11 +10,16 @@ import {
 import BottomSheet from "./BottomSheet";
 import { useTheme } from "../theme";
 import type { LanguageCode } from "../storage";
-import { splitIntoSentences, glossWord, tokenize } from "../translate/duoTranslate";
+import { splitIntoSentences, tokenize } from "../translate/duoTranslate";
 import { getWordMeaning } from "../translate/getWordMeaning";
 
 const ACCENT = "#4C8EFF";
 const ACCENT_SOFT = "rgba(76,142,255,0.12)";
+
+// Códigos ISO para MyMemory
+const LANG_ISO: Record<LanguageCode, string> = {
+  es: "es", en: "en", de: "de", ru: "ru", ja: "ja", zh: "zh-CN",
+};
 
 type Props = {
   visible: boolean;
@@ -31,27 +36,40 @@ type WordCard = {
 };
 
 function isPunct(tok: string): boolean {
-  return !/[\p{L}\p{N}]/u.test(tok);
+  return !/[\p{L}\p{N}']/u.test(tok);
 }
 
-function translateLocal(
+// Normaliza comillas tipográficas
+function cleanWord(w: string): string {
+  return w.replace(/[\u2018\u2019\u02BC]/g, "'").trim();
+}
+
+// Traducción de oración completa via MyMemory
+async function translateSentence(
   sentence: string,
   from: LanguageCode,
   to: LanguageCode
-): string {
-  const tokens = tokenize(sentence);
-  const parts = tokens.map((t) => {
-    if (isPunct(t)) return t;
-    const g = glossWord(t, from, to);
-    return g !== t ? g : t;
-  });
-  let out = "";
-  for (let i = 0; i < parts.length; i++) {
-    const cur = parts[i];
-    const noSpaceBefore = i === 0 || /^[.,!?;:]/.test(cur);
-    out += noSpaceBefore ? cur : " " + cur;
+): Promise<string> {
+  if (!sentence.trim() || from === to) return sentence;
+  try {
+    const langPair = `${LANG_ISO[from]}|${LANG_ISO[to]}`;
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(sentence.trim())}&langpair=${langPair}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+
+    if (!res.ok) return sentence;
+
+    const data = await res.json();
+    const translated: string = data?.responseData?.translatedText ?? "";
+
+    if (!translated || translated.includes("%")) return sentence;
+    return translated.trim();
+  } catch {
+    return sentence;
   }
-  return out.trim();
 }
 
 export default function DuoTranslatorSheet({
@@ -65,6 +83,8 @@ export default function DuoTranslatorSheet({
 
   const [selectedCard, setSelectedCard] = useState<WordCard | null>(null);
   const [openMap, setOpenMap] = useState<Record<number, boolean>>({});
+  const [translationsMap, setTranslationsMap] = useState<Record<number, string>>({});
+  const [loadingMap, setLoadingMap] = useState<Record<number, boolean>>({});
   const [highlightFirst, setHighlightFirst] = useState(true);
 
   const sentences = useMemo(() => splitIntoSentences(text ?? ""), [text]);
@@ -72,19 +92,18 @@ export default function DuoTranslatorSheet({
   const sentenceTokens = useMemo(() => {
     return sentences.map((s) =>
       tokenize(s)
-        .map((t) => t.trim())
+        .map((t) => cleanWord(t))
         .filter((t) => t.length > 0 && !isPunct(t))
     );
   }, [sentences]);
 
-  const localTranslations = useMemo(() => {
-    return sentences.map((s) => translateLocal(s, fromLang, toLang));
-  }, [sentences, fromLang, toLang]);
-
+  // Reset al abrir
   useEffect(() => {
     if (visible) {
       setSelectedCard(null);
       setOpenMap({});
+      setTranslationsMap({});
+      setLoadingMap({});
       setHighlightFirst(true);
       const timer = setTimeout(() => setHighlightFirst(false), 1500);
       return () => clearTimeout(timer);
@@ -92,17 +111,33 @@ export default function DuoTranslatorSheet({
   }, [visible]);
 
   async function handleWordPress(word: string) {
-    setSelectedCard({ word, meaning: "", loading: true });
-    const result = await getWordMeaning(word, fromLang, toLang);
+    const clean = cleanWord(word);
+    setSelectedCard({ word: clean, meaning: "", loading: true });
+    const result = await getWordMeaning(clean, fromLang, toLang);
     setSelectedCard({
-      word: result.word,
+      word: clean,
       meaning: result.meaning || "—",
       loading: false,
     });
   }
 
-  function toggleSentence(idx: number) {
-    setOpenMap((prev) => ({ ...prev, [idx]: !prev[idx] }));
+  async function toggleSentence(idx: number) {
+    const isOpen = !!openMap[idx];
+
+    if (isOpen) {
+      setOpenMap((prev) => ({ ...prev, [idx]: false }));
+      return;
+    }
+
+    // Abrir y traducir si no tenemos traducción aún
+    setOpenMap((prev) => ({ ...prev, [idx]: true }));
+
+    if (!translationsMap[idx]) {
+      setLoadingMap((prev) => ({ ...prev, [idx]: true }));
+      const translated = await translateSentence(sentences[idx], fromLang, toLang);
+      setTranslationsMap((prev) => ({ ...prev, [idx]: translated }));
+      setLoadingMap((prev) => ({ ...prev, [idx]: false }));
+    }
   }
 
   return (
@@ -112,20 +147,13 @@ export default function DuoTranslatorSheet({
         setSelectedCard(null);
         onClose();
       }}
-      title={`${fromLang.toUpperCase()} - ${toLang.toUpperCase()}`}
+      title={`${fromLang.toUpperCase()} → ${toLang.toUpperCase()}`}
       maxHeight={680}
     >
       <ScrollView showsVerticalScrollIndicator={false}>
 
         {highlightFirst && (
-          <View
-            style={{
-              backgroundColor: ACCENT,
-              padding: 12,
-              borderRadius: 14,
-              marginBottom: 12,
-            }}
-          >
+          <View style={{ backgroundColor: ACCENT, padding: 12, borderRadius: 14, marginBottom: 12 }}>
             <Text style={{ color: "#fff", fontWeight: "900" }}>
               Toca una palabra para ver su significado
             </Text>
@@ -135,7 +163,8 @@ export default function DuoTranslatorSheet({
         {sentences.map((s, idx) => {
           const tokens = sentenceTokens[idx] ?? [];
           const isOpen = !!openMap[idx];
-          const translation = localTranslations[idx] ?? "";
+          const translation = translationsMap[idx];
+          const isLoading = !!loadingMap[idx];
 
           return (
             <View
@@ -149,22 +178,8 @@ export default function DuoTranslatorSheet({
                 backgroundColor: colors.card,
               }}
             >
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                }}
-              >
-                <Text
-                  style={{
-                    color: colors.text,
-                    fontWeight: "900",
-                    fontSize: 16,
-                    flex: 1,
-                    paddingRight: 10,
-                  }}
-                >
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16, flex: 1, paddingRight: 10 }}>
                   {s}
                 </Text>
 
@@ -179,30 +194,17 @@ export default function DuoTranslatorSheet({
                     borderColor: isOpen ? ACCENT : colors.border,
                   }}
                 >
-                  <Text
-                    style={{
-                      color: isOpen ? ACCENT : colors.text,
-                      fontWeight: "900",
-                      fontSize: 13,
-                    }}
-                  >
+                  <Text style={{ color: isOpen ? ACCENT : colors.text, fontWeight: "900", fontSize: 13 }}>
                     {isOpen ? "Ocultar" : "Traducir"}
                   </Text>
                 </Pressable>
               </View>
 
-              <View
-                style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  gap: 6,
-                  marginTop: 12,
-                }}
-              >
+              {/* Tokens tocables */}
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
                 {tokens.map((tok, tIdx) => {
                   const isHighlighted = highlightFirst && idx === 0 && tIdx === 0;
-                  const isSelected =
-                    selectedCard?.word.toLowerCase() === tok.toLowerCase();
+                  const isSelected = selectedCard?.word.toLowerCase() === tok.toLowerCase();
 
                   return (
                     <Pressable
@@ -213,22 +215,15 @@ export default function DuoTranslatorSheet({
                         paddingHorizontal: 12,
                         borderRadius: 999,
                         borderWidth: 1,
-                        borderColor:
-                          isHighlighted || isSelected ? ACCENT : colors.border,
-                        backgroundColor:
-                          pressed || isHighlighted || isSelected
-                            ? ACCENT_SOFT
-                            : "transparent",
+                        borderColor: isHighlighted || isSelected ? ACCENT : colors.border,
+                        backgroundColor: pressed || isHighlighted || isSelected ? ACCENT_SOFT : "transparent",
                       })}
                     >
-                      <Text
-                        style={{
-                          color:
-                            isHighlighted || isSelected ? ACCENT : colors.text,
-                          fontWeight: "700",
-                          fontSize: 15,
-                        }}
-                      >
+                      <Text style={{
+                        color: isHighlighted || isSelected ? ACCENT : colors.text,
+                        fontWeight: "700",
+                        fontSize: 15,
+                      }}>
                         {tok}
                       </Text>
                     </Pressable>
@@ -236,69 +231,44 @@ export default function DuoTranslatorSheet({
                 })}
               </View>
 
+              {/* Traducción de la oración */}
               {isOpen && (
-                <View
-                  style={{
-                    marginTop: 12,
-                    paddingTop: 12,
-                    borderTopWidth: 1,
-                    borderTopColor: colors.border,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: colors.subtext,
-                      fontWeight: "800",
-                      fontSize: 12,
-                      marginBottom: 4,
-                    }}
-                  >
-                    TRADUCCION
+                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
+                  <Text style={{ color: colors.subtext, fontWeight: "800", fontSize: 11, marginBottom: 4 }}>
+                    TRADUCCIÓN
                   </Text>
-                  <Text
-                    style={{ color: colors.text, fontWeight: "700", fontSize: 15 }}
-                  >
-                    {translation || "—"}
-                  </Text>
+                  {isLoading ? (
+                    <ActivityIndicator color={ACCENT} size="small" />
+                  ) : (
+                    <Text style={{ color: colors.text, fontWeight: "700", fontSize: 15 }}>
+                      {translation || "—"}
+                    </Text>
+                  )}
                 </View>
               )}
             </View>
           );
         })}
 
+        {/* Tarjeta de palabra */}
         {selectedCard && (
-          <View
-            style={{
-              marginBottom: 18,
-              padding: 18,
-              borderRadius: 20,
-              borderWidth: 1,
-              borderColor: ACCENT,
-              backgroundColor: colors.card,
-            }}
-          >
-            <Text
-              style={{
-                color: colors.subtext,
-                fontSize: 11,
-                fontWeight: "800",
-                marginBottom: 6,
-              }}
-            >
-              {fromLang.toUpperCase()} - {toLang.toUpperCase()}
+          <View style={{
+            marginBottom: 18,
+            padding: 18,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: ACCENT,
+            backgroundColor: colors.card,
+          }}>
+            <Text style={{ color: colors.subtext, fontSize: 11, fontWeight: "800", marginBottom: 6 }}>
+              {fromLang.toUpperCase()} → {toLang.toUpperCase()}
             </Text>
 
             <Text style={{ color: colors.text, fontSize: 22, fontWeight: "900" }}>
               {selectedCard.word}
             </Text>
 
-            <View
-              style={{
-                height: 1,
-                backgroundColor: colors.border,
-                marginVertical: 12,
-              }}
-            />
+            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 12 }} />
 
             {selectedCard.loading ? (
               <ActivityIndicator color={ACCENT} />
@@ -310,14 +280,7 @@ export default function DuoTranslatorSheet({
 
             <Pressable
               onPress={() => setSelectedCard(null)}
-              style={{
-                marginTop: 16,
-                alignSelf: "flex-end",
-                paddingVertical: 8,
-                paddingHorizontal: 20,
-                backgroundColor: ACCENT,
-                borderRadius: 12,
-              }}
+              style={{ marginTop: 16, alignSelf: "flex-end", paddingVertical: 8, paddingHorizontal: 20, backgroundColor: ACCENT, borderRadius: 12 }}
             >
               <Text style={{ color: "#fff", fontWeight: "900" }}>Cerrar</Text>
             </Pressable>

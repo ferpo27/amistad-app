@@ -1,5 +1,5 @@
 // app/(tabs)/chat/[id].tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { MATCHES } from "../../../src/mock/matches";
@@ -98,6 +98,16 @@ export default function ChatScreen() {
 
   // ✅ FIX: ahora pasa t como 2do argumento
   const starters = useMemo(() => getStarterSuggestions(match, t), [match, t]);
+
+  // Recargar idioma cada vez que volvemos a esta pantalla
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const l = (await getAppLanguage()) ?? "es";
+        setUiLang(l);
+      })();
+    }, [])
+  );
 
   useEffect(() => {
     (async () => {
