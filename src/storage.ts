@@ -26,6 +26,9 @@ export type StoryPhoto = {
   title: string;
   ts: number;
 };
+export type StoryItem = StoryPhoto;
+// Alias para compatibilidad con StoryRow / StoryViewer
+
 
 export type ProfileData = {
   displayName?: string;

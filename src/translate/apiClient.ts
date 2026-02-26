@@ -1,36 +1,41 @@
 // src/translate/apiClient.ts
-import { TRANSLATOR_API_BASE, type TranslateRequest, type TranslateResponse } from "./config";
+// translatorHealth y getTranslatorBaseUrl — compatibles con chat/[id].tsx
+// No depende de un servidor local: siempre retorna ok=true
+// (la traducción real la hace autoTranslate.ts via Google/MyMemory)
 
-function withTimeout<T>(p: Promise<T>, ms: number) {
-  return new Promise<T>((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error("timeout")), ms);
-    p.then((v) => {
-      clearTimeout(t);
-      resolve(v);
-    }).catch((e) => {
-      clearTimeout(t);
-      reject(e);
-    });
-  });
+export function getTranslatorBaseUrl(): string {
+  return "Google Translate + MyMemory (sin servidor local)";
 }
 
-export async function translateViaApi(req: TranslateRequest): Promise<string> {
-  const url = `${TRANSLATOR_API_BASE}/translate`;
+export async function translatorHealth(): Promise<boolean> {
+  // Sin servidor local, siempre disponible
+  return true;
+}
 
-  const res = await withTimeout(
-    fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req),
-    }),
-    7000
-  );
-
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`API error ${res.status}: ${txt}`);
+// Mantenemos translateViaApi por compatibilidad (no se usa en el chat nuevo)
+export async function translateViaApi(req: {
+  text: string;
+  from: string;
+  to: string;
+}): Promise<string> {
+  // Redirige a Google Translate como fallback
+  try {
+    const url =
+      "https://translate.googleapis.com/translate_a/single?client=gtx" +
+      "&sl=" + req.from +
+      "&tl=" + req.to +
+      "&dt=t&q=" + encodeURIComponent(req.text.trim());
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    return ((data[0] ?? []) as any[][])
+      .map((seg) => (seg[0] ?? "") as string)
+      .join("")
+      .trim() || req.text;
+  } catch {
+    return req.text;
   }
-
-  const json = (await res.json()) as TranslateResponse;
-  return (json?.translated ?? "").toString();
 }

@@ -1,11 +1,15 @@
+// src/theme.tsx
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Appearance, ColorSchemeName } from "react-native";
-import { getThemeMode, setThemeMode, type ThemeMode } from "./storage";
+import { getThemeMode, setThemeMode } from "./storage";
+
+// Re-exportamos ThemeMode desde storage para que otros archivos lo importen desde acá
+export type { ThemeMode } from "./storage";
 
 type Theme = {
-  mode: ThemeMode;
+  mode: import("./storage").ThemeMode;
   scheme: "light" | "dark";
-  setMode: (m: ThemeMode) => Promise<void>;
+  setMode: (m: import("./storage").ThemeMode) => Promise<void>;
   colors: {
     bg: string;
     card: string;
@@ -24,7 +28,7 @@ type Theme = {
 const ThemeContext = createContext<Theme | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>("system");
+  const [mode, setModeState] = useState<import("./storage").ThemeMode>("system");
   const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(
     Appearance.getColorScheme()
   );
@@ -69,7 +73,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
   }, [scheme]);
 
-  async function setMode(m: ThemeMode) {
+  async function setMode(m: import("./storage").ThemeMode) {
     setModeState(m);
     await setThemeMode(m);
   }

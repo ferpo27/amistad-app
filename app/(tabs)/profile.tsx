@@ -1,121 +1,162 @@
-import { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  Image,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-} from "react-native";
-import * as ImagePicker from "expo-image-picker";
+// app/(tabs)/profile/[id].tsx
+import React, { useMemo, useState } from "react";
+import { ScrollView, Text, View } from "react-native";
+import { useLocalSearchParams } from "expo-router";
+import { useTranslation } from "react-i18next";
 
-import {
-  getMyProfile,
-  addProfilePhoto,
-  removeProfilePhoto,
-  addStory,
-  updateStory,
-  deleteStory,
-  MyProfile,
-  ProfileStory,
-} from "../../src/profileStore";
+import { useTheme } from "../../../src/theme";
+import StoryRow from "../../../src/components/StoryRow";
+import StoryViewer from "../../../src/components/StoryViewer";
+import type { StoryItem } from "../../../src/storage";
+import { PROFILES, type PublicProfile } from "../../../src/mock/profiles";
+import type { LearningLang } from "../../../src/storage";
 
-export default function ProfileScreen() {
-  const [profile, setProfile] = useState<MyProfile | null>(null);
+const LANG_FLAGS: Record<string, string> = {
+  es: "🇦🇷", en: "🇺🇸", de: "🇩🇪", ja: "🇯🇵", ru: "🇷🇺", zh: "🇨🇳",
+};
 
-  useEffect(() => {
-    load();
-  }, []);
+const LEVEL_COLOR: Record<string, string> = {
+  A1: "#94a3b8", A2: "#64748b",
+  B1: "#3b82f6", B2: "#2563eb",
+  C1: "#7c3aed", C2: "#059669",
+};
 
-  async function load() {
-    const p = await getMyProfile();
-    setProfile(p);
-  }
+export default function PublicProfileScreen() {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const { id } = useLocalSearchParams<{ id: string }>();
 
-  async function pickPhoto() {
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-    });
+  const user = useMemo<PublicProfile | undefined>(
+    () => PROFILES.find((p: PublicProfile) => p.id === id),
+    [id]
+  );
 
-    if (!res.canceled) {
-      const uri = res.assets[0].uri;
-      const updated = await addProfilePhoto(uri);
-      setProfile(updated);
-    }
-  }
+  const [openStory, setOpenStory] = useState(false);
+  const [selectedStory, setSelectedStory] = useState<StoryItem | null>(null);
 
-  async function pickStory() {
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-    });
-
-    if (!res.canceled) {
-      const uri = res.assets[0].uri;
-      const updated = await addStory(uri);
-      setProfile(updated);
-    }
-  }
-
-  if (!profile) return null;
+  // Stories de PROFILES tienen shape { id, title, photos[], ts }
+  // StoryItem/StoryPhoto necesita { id, uri, title, ts }
+  // Mapeamos tomando la primer photo como uri
+  const stories: StoryItem[] = useMemo(
+    () =>
+      (user?.stories ?? []).map((s) => ({
+        id: s.id,
+        uri: s.photos[0] ?? "",
+        title: s.title,
+        ts: s.ts,
+      })),
+    [user]
+  );
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.name}>{profile.name}</Text>
-      <Text style={styles.bio}>{profile.bio}</Text>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
 
-      <Text style={styles.section}>Fotos</Text>
+        {/* Nombre y país */}
+        <Text style={{ color: colors.fg, fontSize: 26, fontWeight: "900" }}>
+          {user?.name ?? t("profile")}
+        </Text>
+        {user?.country ? (
+          <Text style={{ marginTop: 4, color: colors.fg, opacity: 0.6, fontWeight: "700" }}>
+            {user.country}{user.city ? "  •  " + user.city : ""}
+          </Text>
+        ) : null}
 
-      <View style={styles.grid}>
-        {profile.photos.map((uri: string) => (
-          <TouchableOpacity
-            key={uri}
-            onLongPress={async () => {
-              const updated = await removeProfilePhoto(uri);
-              setProfile(updated);
-            }}
-          >
-            <Image source={{ uri }} style={styles.photo} />
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <TouchableOpacity style={styles.button} onPress={pickPhoto}>
-        <Text style={styles.buttonText}>Agregar foto</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.section}>Historias</Text>
-
-      <ScrollView horizontal>
-        {profile.stories.map((s: ProfileStory) => (
-          <View key={s.id} style={styles.story}>
-            <Image source={{ uri: s.imageUri }} style={styles.storyImg} />
+        {/* Idiomas */}
+        {user && (
+          <View style={{
+            marginTop: 14, backgroundColor: colors.card, borderRadius: 16,
+            padding: 14, borderWidth: 1, borderColor: colors.border,
+          }}>
+            <Text style={{ color: colors.fg, opacity: 0.5, fontSize: 11, fontWeight: "800", marginBottom: 10 }}>
+              IDIOMAS
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <Text style={{ fontSize: 20 }}>{LANG_FLAGS[user.nativeLang] ?? "🌐"}</Text>
+              <Text style={{ color: colors.fg, fontWeight: "900" }}>{user.nativeLang.toUpperCase()}</Text>
+              <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: colors.accentSoft }}>
+                <Text style={{ color: colors.accent, fontWeight: "900", fontSize: 11 }}>NATIVO</Text>
+              </View>
+            </View>
+            {user.learning.map((l: LearningLang) => (
+              <View key={l.lang} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <Text style={{ fontSize: 20 }}>{LANG_FLAGS[l.lang] ?? "🌐"}</Text>
+                <Text style={{ color: colors.fg, fontWeight: "900" }}>{l.lang.toUpperCase()}</Text>
+                {l.level ? (
+                  <View style={{
+                    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+                    backgroundColor: (LEVEL_COLOR[l.level] ?? "#888") + "22",
+                  }}>
+                    <Text style={{ color: LEVEL_COLOR[l.level] ?? colors.fg, fontWeight: "900", fontSize: 11 }}>
+                      {l.level}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ))}
           </View>
-        ))}
+        )}
+
+        {/* Bio — solo si tiene contenido */}
+        {user?.bio ? (
+          <View style={{
+            marginTop: 12, backgroundColor: colors.card, borderRadius: 16,
+            padding: 14, borderWidth: 1, borderColor: colors.border,
+          }}>
+            <Text style={{ color: colors.fg, opacity: 0.5, fontSize: 11, fontWeight: "800", marginBottom: 6 }}>
+              BIO
+            </Text>
+            <Text style={{ color: colors.fg, fontWeight: "700", fontSize: 15, lineHeight: 22 }}>
+              {user.bio}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Intereses — solo si hay */}
+        {user?.interests?.length ? (
+          <View style={{
+            marginTop: 12, backgroundColor: colors.card, borderRadius: 16,
+            padding: 14, borderWidth: 1, borderColor: colors.border,
+          }}>
+            <Text style={{ color: colors.fg, opacity: 0.5, fontSize: 11, fontWeight: "800", marginBottom: 10 }}>
+              INTERESES
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {user.interests.map((it: string) => (
+                <View key={it} style={{
+                  paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
+                  backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent + "44",
+                }}>
+                  <Text style={{ color: colors.accent, fontWeight: "800" }}>{it}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {/* Historias — solo si hay */}
+        {stories.length > 0 && (
+          <View style={{ marginTop: 12 }}>
+            <Text style={{ color: colors.fg, fontSize: 16, fontWeight: "900", marginBottom: 4 }}>
+              {t("stories")}
+            </Text>
+            <StoryRow
+              stories={stories}
+              onOpen={(st: StoryItem) => {
+                setSelectedStory(st);
+                setOpenStory(true);
+              }}
+            />
+          </View>
+        )}
+
       </ScrollView>
 
-      <TouchableOpacity style={styles.button} onPress={pickStory}>
-        <Text style={styles.buttonText}>Agregar historia</Text>
-      </TouchableOpacity>
-    </ScrollView>
+      <StoryViewer
+        visible={openStory}
+        onClose={() => setOpenStory(false)}
+        story={selectedStory}
+      />
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  name: { fontSize: 22, fontWeight: "bold" },
-  bio: { marginBottom: 20 },
-  section: { marginTop: 20, fontWeight: "bold" },
-  grid: { flexDirection: "row", flexWrap: "wrap" },
-  photo: { width: 100, height: 100, margin: 5, borderRadius: 8 },
-  story: { marginRight: 10 },
-  storyImg: { width: 80, height: 120, borderRadius: 10 },
-  button: {
-    backgroundColor: "#111",
-    padding: 10,
-    marginTop: 10,
-    borderRadius: 8,
-  },
-  buttonText: { color: "white", textAlign: "center" },
-});

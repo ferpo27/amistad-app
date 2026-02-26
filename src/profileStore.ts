@@ -1,6 +1,8 @@
+// src/profileStore.ts  ← ÚNICO archivo canónico. src/storage/profileStore.ts fue eliminado.
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { LanguageCode } from "./storage";
 
-export type LanguageCode = "es" | "en" | "de" | "ja" | "ru" | "zh";
+export type { LanguageCode };
 
 export type ProfileStory = {
   id: string;
@@ -22,7 +24,8 @@ export type MyProfile = {
   stories: ProfileStory[];
 };
 
-const KEY = "myProfile_v2";
+// v3 — nueva key para migración limpia
+const KEY = "myProfile_v3";
 
 const DEFAULT_PROFILE: MyProfile = {
   id: "me",
@@ -41,44 +44,52 @@ const DEFAULT_PROFILE: MyProfile = {
 };
 
 function uid(prefix = "id") {
-  return `${prefix}_${Math.random().toString(16).slice(2)}_${Date.now()}`;
+  return prefix + "_" + Math.random().toString(16).slice(2) + "_" + Date.now();
+}
+
+function normalize(raw: any): MyProfile {
+  return {
+    id: "me",
+    name: typeof raw?.name === "string" ? raw.name : DEFAULT_PROFILE.name,
+    username: typeof raw?.username === "string" ? raw.username : DEFAULT_PROFILE.username,
+    country: typeof raw?.country === "string" ? raw.country : DEFAULT_PROFILE.country,
+    nativeLang: (raw?.nativeLang ?? DEFAULT_PROFILE.nativeLang) as LanguageCode,
+    learning: Array.isArray(raw?.learning) ? raw.learning : DEFAULT_PROFILE.learning,
+    bio: typeof raw?.bio === "string" ? raw.bio : DEFAULT_PROFILE.bio,
+    interests: Array.isArray(raw?.interests) ? raw.interests : DEFAULT_PROFILE.interests,
+    photos: Array.isArray(raw?.photos) ? raw.photos : [],
+    stories: Array.isArray(raw?.stories) ? raw.stories : [],
+  };
 }
 
 export async function getMyProfile(): Promise<MyProfile> {
-  const raw = await AsyncStorage.getItem(KEY);
-  if (!raw) {
-    await AsyncStorage.setItem(KEY, JSON.stringify(DEFAULT_PROFILE));
-    return DEFAULT_PROFILE;
-  }
   try {
-    return JSON.parse(raw) as MyProfile;
+    const raw = await AsyncStorage.getItem(KEY);
+    if (!raw) {
+      await AsyncStorage.setItem(KEY, JSON.stringify(DEFAULT_PROFILE));
+      return DEFAULT_PROFILE;
+    }
+    return normalize(JSON.parse(raw));
   } catch {
-    await AsyncStorage.setItem(KEY, JSON.stringify(DEFAULT_PROFILE));
     return DEFAULT_PROFILE;
   }
 }
 
-export async function updateMyProfile(
-  patch: Partial<MyProfile>
-): Promise<MyProfile> {
+export async function updateMyProfile(patch: Partial<MyProfile>): Promise<MyProfile> {
   const cur = await getMyProfile();
-  const next: MyProfile = { ...cur, ...patch };
+  const next = normalize({ ...cur, ...patch });
   await AsyncStorage.setItem(KEY, JSON.stringify(next));
   return next;
 }
 
 export async function addProfilePhoto(uri: string): Promise<MyProfile> {
   const cur = await getMyProfile();
-  const next = { ...cur, photos: [uri, ...cur.photos].slice(0, 9) };
-  await AsyncStorage.setItem(KEY, JSON.stringify(next));
-  return next;
+  return updateMyProfile({ photos: [uri, ...cur.photos].slice(0, 9) });
 }
 
 export async function removeProfilePhoto(uri: string): Promise<MyProfile> {
   const cur = await getMyProfile();
-  const next = { ...cur, photos: cur.photos.filter((p) => p !== uri) };
-  await AsyncStorage.setItem(KEY, JSON.stringify(next));
-  return next;
+  return updateMyProfile({ photos: cur.photos.filter((p) => p !== uri) });
 }
 
 export async function addStory(imageUri: string): Promise<MyProfile> {
@@ -89,9 +100,7 @@ export async function addStory(imageUri: string): Promise<MyProfile> {
     createdAt: Date.now(),
     caption: "",
   };
-  const next = { ...cur, stories: [story, ...cur.stories] };
-  await AsyncStorage.setItem(KEY, JSON.stringify(next));
-  return next;
+  return updateMyProfile({ stories: [story, ...cur.stories] });
 }
 
 export async function updateStory(
@@ -99,22 +108,12 @@ export async function updateStory(
   patch: Partial<ProfileStory>
 ): Promise<MyProfile> {
   const cur = await getMyProfile();
-  const next = {
-    ...cur,
-    stories: cur.stories.map((s) =>
-      s.id === storyId ? { ...s, ...patch } : s
-    ),
-  };
-  await AsyncStorage.setItem(KEY, JSON.stringify(next));
-  return next;
+  return updateMyProfile({
+    stories: cur.stories.map((s) => (s.id === storyId ? { ...s, ...patch } : s)),
+  });
 }
 
 export async function deleteStory(storyId: string): Promise<MyProfile> {
   const cur = await getMyProfile();
-  const next = {
-    ...cur,
-    stories: cur.stories.filter((s) => s.id !== storyId),
-  };
-  await AsyncStorage.setItem(KEY, JSON.stringify(next));
-  return next;
+  return updateMyProfile({ stories: cur.stories.filter((s) => s.id !== storyId) });
 }
