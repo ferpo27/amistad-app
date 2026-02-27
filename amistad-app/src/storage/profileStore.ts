@@ -1,6 +1,6 @@
 // src/storage/profileStore.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { LanguageCode } from "../storage";
+import type { LanguageCode } from "@/src/storage";
 
 export type ProfileStory = {
   id: string;
@@ -101,10 +101,7 @@ export async function addStory(imageUri: string): Promise<MyProfile> {
 
 export async function updateStory(storyId: string, patch: Partial<ProfileStory>): Promise<MyProfile> {
   const cur = await getMyProfile();
-  const next: MyProfile = {
-    ...cur,
-    stories: cur.stories.map((s) => (s.id === storyId ? { ...s, ...patch } : s)),
-  };
+  const next: MyProfile = { ...cur, stories: cur.stories.map((s) => (s.id === storyId ? { ...s, ...patch } : s)) };
   await AsyncStorage.setItem(KEY, JSON.stringify(next));
   return next;
 }

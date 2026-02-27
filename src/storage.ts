@@ -26,12 +26,16 @@ export type StoryPhoto = {
   title: string;
   ts: number;
 };
-export type StoryItem = StoryPhoto;
-// Alias para compatibilidad con StoryRow / StoryViewer
 
+// Alias para StoryRow / StoryViewer
+export type StoryItem = StoryPhoto;
 
 export type ProfileData = {
   displayName?: string;
+  username?: string;
+  country?: string;
+  city?: string;
+  nativeLang?: LanguageCode;
   contact?: Contact;
 
   favorites?: string[];
@@ -42,7 +46,6 @@ export type ProfileData = {
     goal?: LanguageGoal;
   };
 
-  // ✅ historias/fotos
   stories?: StoryPhoto[];
 };
 
@@ -357,3 +360,17 @@ export async function resetDevStorage(): Promise<void> {
     // no rompas la app si falla
   }
 }
+
+export type DOB = { day: number; month: number; year: number };
+
+export function ageFromDob(dob?: DOB | null): number | null {
+  if (!dob) return null;
+  const now = new Date();
+  const birth = new Date(dob.year, dob.month - 1, dob.day);
+  let age = now.getFullYear() - birth.getFullYear();
+  if (now.getMonth() - birth.getMonth() < 0 ||
+     (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) age--;
+  return age >= 0 ? age : null;
+}
+
+export const isLoggedIn = isAuthOk;

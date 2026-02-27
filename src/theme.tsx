@@ -1,44 +1,52 @@
 // src/theme.tsx
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { Appearance, ColorSchemeName } from "react-native";
-import { getThemeMode, setThemeMode } from "./storage";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useColorScheme } from "react-native";
+import { getThemeMode, setThemeMode, type ThemeMode } from "./storage";
 
-// Re-exportamos ThemeMode desde storage para que otros archivos lo importen desde acá
-export type { ThemeMode } from "./storage";
-
-type Theme = {
-  mode: import("./storage").ThemeMode;
-  scheme: "light" | "dark";
-  setMode: (m: import("./storage").ThemeMode) => Promise<void>;
-  colors: {
-    bg: string;
-    card: string;
-    text: string;
-    subtext: string;
-    border: string;
-    primary: string;
-    bubbleMe: string;
-    bubbleThem: string;
-    fg: string;
-    accent: string;
-    accentSoft: string;
-  };
+export type ThemeScheme = "light" | "dark";
+export type ThemeColors = {
+  bg: string;
+  card: string;
+  border: string;
+  fg: string;
+  text: string;
+  accent: string;
+  accentSoft: string;
+  subtext: string;
+  primary: string;
 };
 
-const ThemeContext = createContext<Theme | null>(null);
+function colorsFor(scheme: ThemeScheme): ThemeColors {
+  const accent = "#4C8EFF";
+  if (scheme === "dark") {
+    return {
+      bg: "#0B0D12",
+      card: "#121624",
+      border: "rgba(255,255,255,0.10)",
+      fg: "#FFFFFF",
+      text: "#FFFFFF",
+      subtext: "rgba(255,255,255,0.55)",
+      primary: "#4C8EFF",
+      accent,
+      accentSoft: "rgba(76,142,255,0.15)",
+    };
+  }
+  return {
+    bg: "#FFFFFF",
+    card: "#F5F7FB",
+    border: "rgba(0,0,0,0.10)",
+    fg: "#0B0D12",
+    text: "#0B0D12",
+    subtext: "rgba(11,13,18,0.55)",
+    primary: "#4C8EFF",
+    accent,
+    accentSoft: "rgba(76,142,255,0.10)",
+  };
+}
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setModeState] = useState<import("./storage").ThemeMode>("system");
-  const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(
-    Appearance.getColorScheme()
-  );
-
-  useEffect(() => {
-    const sub = Appearance.addChangeListener(({ colorScheme }) =>
-      setSystemScheme(colorScheme)
-    );
-    return () => sub.remove();
-  }, []);
+export function useThemeMode() {
+  const systemScheme = (useColorScheme() ?? "light") as ThemeScheme;
+  const [mode, setModeState] = useState<ThemeMode>("system");
 
   useEffect(() => {
     (async () => {
@@ -47,52 +55,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const scheme: "light" | "dark" = useMemo(() => {
-    if (mode === "light") return "light";
-    if (mode === "dark") return "dark";
-    return systemScheme === "dark" ? "dark" : "light";
-  }, [mode, systemScheme]);
+  const scheme: ThemeScheme = mode === "system" ? systemScheme : (mode as ThemeScheme);
+  const colors = useMemo(() => colorsFor(scheme), [scheme]);
 
-  const colors = useMemo(() => {
-    const dark = scheme === "dark";
-    const fg = dark ? "#FFFFFF" : "#111111";
-    const accent = "#4C8EFF";
-    const accentSoft = "rgba(76,142,255,0.12)";
-    return {
-      bg: dark ? "#0B0B0E" : "#FFFFFF",
-      card: dark ? "#14141A" : "#F6F6F7",
-      text: fg,
-      subtext: dark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.65)",
-      border: dark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)",
-      primary: "#111111",
-      bubbleMe: dark ? "#FFFFFF" : "#111111",
-      bubbleThem: dark ? "#1B1B22" : "#F1F1F1",
-      fg,
-      accent,
-      accentSoft,
-    };
-  }, [scheme]);
-
-  async function setMode(m: import("./storage").ThemeMode) {
+  const setMode = useCallback(async (m: ThemeMode) => {
     setModeState(m);
     await setThemeMode(m);
-  }
+  }, []);
 
-  const value: Theme = useMemo(
-    () => ({ mode, scheme, setMode, colors }),
-    [mode, scheme, colors]
-  );
-
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return { mode, scheme, colors, setMode };
 }
 
-export function useTheme(): Theme {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error("useTheme must be used inside <ThemeProvider>");
-  return ctx;
-}
-
-export function useThemeMode() {
-  const { mode, setMode, colors, scheme } = useTheme();
-  return { mode, setMode, colors, scheme };
+export function useTheme() {
+  return useThemeMode();
 }

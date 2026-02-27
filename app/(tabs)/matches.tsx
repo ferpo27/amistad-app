@@ -2,8 +2,8 @@
 import React, { useMemo, useState } from "react";
 import { View, Text, ScrollView, Pressable, Platform } from "react-native";
 import { useRouter } from "expo-router";
-import { useThemeMode } from "../../src/theme";
 
+import { useThemeMode } from "../../src/theme";
 import { PROFILES } from "../../src/mock/profiles";
 import { calculateCompatibility } from "../../src/matching/calculateCompatibility";
 
@@ -22,9 +22,10 @@ type RowProfile = {
 function learningToLabel(learning: any): string {
   if (!learning) return "—";
   if (typeof learning === "string") return learning;
+
   if (Array.isArray(learning)) {
     const parts = learning
-      .map((x) => {
+      .map((x: any) => {
         const code = (x?.code ?? x?.lang ?? "").toString().toUpperCase().trim();
         const lvl = (x?.level ?? "").toString().toUpperCase().trim();
         return [code, lvl].filter(Boolean).join(" ") || null;
@@ -32,6 +33,7 @@ function learningToLabel(learning: any): string {
       .filter(Boolean) as string[];
     return parts.length ? parts.join(", ") : "—";
   }
+
   return "—";
 }
 
@@ -64,7 +66,6 @@ export default function MatchesScreen() {
     const list = base
       .map((p) => ({ ...p, score: calculateCompatibility(me, p as any) }))
       .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-
     return onlyTop ? list.slice(0, 20) : list;
   }, [me, onlyTop]);
 
@@ -100,14 +101,12 @@ export default function MatchesScreen() {
             backgroundColor: onlyTop ? colors.accentSoft : colors.card,
           }}
         >
-          <Text style={{ color: colors.fg, fontWeight: "900" }}>
-            {onlyTop ? "Top" : "All"}
-          </Text>
+          <Text style={{ color: colors.fg, fontWeight: "900" }}>{onlyTop ? "Top" : "All"}</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-        {ranked.map((p) => {
+        {ranked.map((p: RowProfile) => {
           const score = typeof p.score === "number" ? p.score : 0;
           const scorePct = Math.max(0, Math.min(100, Math.round(score * 100)));
 
@@ -140,8 +139,8 @@ export default function MatchesScreen() {
                 </View>
               </View>
 
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-                {(p.interests ?? []).slice(0, 6).map((it) => (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 as any, marginTop: 10 }}>
+                {(p.interests ?? []).slice(0, 6).map((it: string) => (
                   <View
                     key={it}
                     style={{

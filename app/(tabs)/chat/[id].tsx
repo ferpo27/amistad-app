@@ -195,7 +195,7 @@ export default function ChatScreen() {
           Native: {(matchNativeLang ?? "en").toUpperCase()}
           {match?.learning?.length
             ? ` • Learning: ${match.learning
-                .map((l: any) => `${String(l.lang).toUpperCase()} ${l.level}`)
+                .map((l: { lang: string; level: string }) => `${String(l.lang).toUpperCase()} ${l.level}`)
                 .join(", ")}`
             : ""}
         </Text>
@@ -215,7 +215,7 @@ export default function ChatScreen() {
           </View>
 
           <View style={{ marginTop: 8, gap: 8 }}>
-            {starters.slice(0, 3).map((s) => (
+            {starters.slice(0, 3).map((s: Starter) => (
               <Pressable
                 key={s.id}
                 onPress={() => handleSend(s.text)}
