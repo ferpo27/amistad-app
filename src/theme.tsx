@@ -1,5 +1,5 @@
 // src/theme.tsx
-import { useCallback, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useColorScheme } from "react-native";
 import { getThemeMode, setThemeMode, type ThemeMode } from "./storage";
 
@@ -63,9 +63,20 @@ export function useThemeMode() {
     await setThemeMode(m);
   }, []);
 
-  return { mode, scheme, colors, setMode };
+  return { mode, scheme, colors, setMode, isDark: scheme === "dark" };
 }
 
 export function useTheme() {
   return useThemeMode();
 }
+
+// ── ThemeProvider (Context) ──────────────────────────────────────────────────
+type ThemeContextValue = ReturnType<typeof useThemeMode>;
+const ThemeContext = createContext<ThemeContextValue | null>(null);
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const value = useThemeMode();
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+
+export { type ThemeMode };

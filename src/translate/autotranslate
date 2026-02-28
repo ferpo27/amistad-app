@@ -1,1 +1,3 @@
-export * from "./autoTranslate";
+// autoTranslate.ts — re-exports translation utilities
+export * from "./duoTranslate";
+export * from "./translatorApi";

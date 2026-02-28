@@ -37,6 +37,7 @@ export type ProfileData = {
   city?: string;
   nativeLang?: LanguageCode;
   contact?: Contact;
+  dob?: DOB;
 
   favorites?: string[];
   interests?: string[];
@@ -195,6 +196,7 @@ export async function getProfile(): Promise<ProfileData> {
   return {
     displayName: typeof parsed.displayName === "string" ? parsed.displayName : undefined,
     contact: parsed.contact ?? undefined,
+    dob: parsed.dob ?? undefined,
     favorites,
     interests,
     languageLearning: { learn, goal },

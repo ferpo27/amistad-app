@@ -5,6 +5,7 @@ import { getThemeMode, setThemeMode, type ThemeMode } from "./storage";
 type Theme = {
   mode: ThemeMode;
   scheme: "light" | "dark";
+  isDark: boolean;
   setMode: (m: ThemeMode) => Promise<void>;
   colors: {
     bg: string;
@@ -75,7 +76,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
 
   const value: Theme = useMemo(
-    () => ({ mode, scheme, setMode, colors }),
+    () => ({ mode, scheme, isDark: scheme === "dark", setMode, colors }),
     [mode, scheme, colors]
   );
 
@@ -89,6 +90,8 @@ export function useTheme(): Theme {
 }
 
 export function useThemeMode() {
-  const { mode, setMode, colors, scheme } = useTheme();
-  return { mode, setMode, colors, scheme };
+  const { mode, setMode, colors, scheme, isDark } = useTheme();
+  return { mode, setMode, colors, scheme, isDark };
 }
+
+export type { ThemeMode };
