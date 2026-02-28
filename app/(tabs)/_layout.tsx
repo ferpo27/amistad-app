@@ -10,65 +10,55 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: true,
+        headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
+          height: 60,
+          paddingBottom: 8,
         },
         tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.fg + "88",
-        headerStyle: { backgroundColor: colors.card },
-        headerTintColor: colors.fg,
+        tabBarInactiveTintColor: colors.fg + "55",
       }}
     >
       <Tabs.Screen
         name="home"
         options={{
-          title: "Home",
           tabBarIcon: ({ color, size }) => <Ionicons name="home" color={color} size={size} />,
         }}
       />
-
       <Tabs.Screen
         name="chats"
         options={{
-          title: "Chats",
           tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" color={color} size={size} />,
         }}
       />
-
       <Tabs.Screen
         name="matches"
         options={{
-          title: "Matches",
           tabBarIcon: ({ color, size }) => <Ionicons name="people" color={color} size={size} />,
         }}
       />
-
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Perfil",
           tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} />,
         }}
       />
-
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Ajustes",
           tabBarIcon: ({ color, size }) => <Ionicons name="settings" color={color} size={size} />,
         }}
       />
-
-      {/* Ocultamos la carpeta chat dentro de tabs, pero sigue navegable */}
       <Tabs.Screen
         name="chat/[id]"
-        options={{
-          href: null,
-          title: "Chat",
-        }}
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="profile/[id]"
+        options={{ href: null }}
       />
     </Tabs>
   );

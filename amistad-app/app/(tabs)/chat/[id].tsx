@@ -14,19 +14,19 @@ import {
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
-import i18n from "../../../src/i18n";
-import { useThemeMode } from "../../../src/theme";
-import { MATCHES } from "../../../src/mock/matches";
-import { getProfile, getChat, appendChat, type ChatMessage } from "../../../src/storage";
-import { generateConversationStarters } from "../../../src/conversation/connectionEngine";
-import { blockUser, reportUser, type ReportReason } from "../../../src/safety";
-import { getBotReply } from "../../../src/bots/botReply";
+import i18n from "../../../../src/i18n";
+import { useThemeMode } from "../../../../src/theme";
+import { MATCHES } from "../../../../src/mock/matches";
+import { getProfile, getChat, appendChat, type ChatMessage } from "../../../../src/storage";
+import { generateConversationStarters } from "../../../../src/conversation/connectionEngine";
+import { blockUser, reportUser, type ReportReason } from "../../../../src/safety";
+import { getBotReply } from "../../../../src/bots/botReply";
 import {
   translateCached,
   translateWordInContextCached,
-} from "../../../src/translate/autoTranslate";
-import type { LanguageCode } from "../../../src/translate/types";
-import { translatorHealth, getTranslatorBaseUrl } from "../../../src/translate/apiClient";
+} from "../../../../src/translate/autoTranslate";
+import type { LanguageCode } from "../../../../src/translate/types";
+import { translatorHealth, getTranslatorBaseUrl } from "../../../../src/translate/apiClient";
 
 type MatchProfile = (typeof MATCHES)[number];
 type WordToken = { token: string; index: number };

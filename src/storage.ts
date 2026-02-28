@@ -25,6 +25,8 @@ export type StoryPhoto = {
   uri: string;
   title: string;
   ts: number;
+  expiresAt?: number; // timestamp unix - si no existe, no expira
+  durationHours?: 24 | 48;
 };
 
 // Alias para StoryRow / StoryViewer
@@ -224,10 +226,10 @@ export async function updateProfile(patch: Partial<ProfileData>): Promise<Profil
 }
 
 // ✅ Agregar historia (titulo opcional, podés editar después)
-export async function addStoryPhoto(uri: string, title = ""): Promise<ProfileData> {
+export async function addStoryPhoto(uri: string, title = "", expiresAt?: number): Promise<ProfileData> {
   const cur = await getProfile();
   const ts = Date.now();
-  const story: StoryPhoto = { id: `${ts}-${Math.random().toString(16).slice(2)}`, uri, title, ts };
+  const story: StoryPhoto = { id: `${ts}-${Math.random().toString(16).slice(2)}`, uri, title, ts, expiresAt };
   const nextStories = [story, ...(cur.stories ?? [])];
   return updateProfile({ stories: nextStories });
 }
