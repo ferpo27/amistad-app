@@ -41,6 +41,10 @@ export type ProfileData = {
   contact?: Contact;
   dob?: DOB;
 
+  // ✅ NUEVO: para que se muestre y NO se pierda
+  bio?: string;
+  photoUri?: string;
+
   favorites?: string[];
   interests?: string[];
 
@@ -197,10 +201,21 @@ export async function getProfile(): Promise<ProfileData> {
 
   return {
     displayName: typeof parsed.displayName === "string" ? parsed.displayName : undefined,
+    username: typeof parsed.username === "string" ? parsed.username : undefined,
+    country: typeof parsed.country === "string" ? parsed.country : undefined,
+    city: typeof parsed.city === "string" ? parsed.city : undefined,
+    nativeLang: isLanguageCode(parsed.nativeLang) ? parsed.nativeLang : undefined,
+
     contact: parsed.contact ?? undefined,
     dob: parsed.dob ?? undefined,
+
+    // ✅ NUEVO: persiste bio y foto de perfil
+    bio: typeof (parsed as any).bio === "string" ? (parsed as any).bio : undefined,
+    photoUri: typeof (parsed as any).photoUri === "string" ? (parsed as any).photoUri : undefined,
+
     favorites,
     interests,
+
     languageLearning: { learn, goal },
     stories,
   };
@@ -234,7 +249,10 @@ export async function addStoryPhoto(uri: string, title = "", expiresAt?: number)
   return updateProfile({ stories: nextStories });
 }
 
-export async function updateStoryPhoto(storyId: string, patch: Partial<Pick<StoryPhoto, "title" | "uri">>): Promise<ProfileData> {
+export async function updateStoryPhoto(
+  storyId: string,
+  patch: Partial<Pick<StoryPhoto, "title" | "uri">>
+): Promise<ProfileData> {
   const cur = await getProfile();
   const nextStories = (cur.stories ?? []).map((s) => (s.id === storyId ? { ...s, ...patch } : s));
   return updateProfile({ stories: nextStories });
@@ -313,7 +331,9 @@ export async function getChat(matchId: string): Promise<ChatMessage[]> {
       const text = typeof m?.text === "string" ? m.text : "";
       const ts = typeof m?.ts === "number" ? m.ts : Date.now();
       const id =
-        typeof m?.id === "string" && m.id.length > 0 ? m.id : `${ts}-${Math.random().toString(16).slice(2)}`;
+        typeof m?.id === "string" && m.id.length > 0
+          ? m.id
+          : `${ts}-${Math.random().toString(16).slice(2)}`;
       return { id, ts, from, text };
     })
     .filter((m) => m.text.trim().length > 0);
@@ -356,8 +376,6 @@ export async function clearAll(): Promise<void> {
 export async function resetDevStorage(): Promise<void> {
   try {
     const keys = await AsyncStorage.getAllKeys();
-    // si en tu app no usás prefijos, esto no borra nada “de más”
-    // (podés cambiarlo a AsyncStorage.clear() si querés limpiar todo)
     const appKeys = keys.filter((k) => k.startsWith("app_") || k.startsWith("amistad_"));
     if (appKeys.length) await AsyncStorage.multiRemove(appKeys);
   } catch {
@@ -372,8 +390,11 @@ export function ageFromDob(dob?: DOB | null): number | null {
   const now = new Date();
   const birth = new Date(dob.year, dob.month - 1, dob.day);
   let age = now.getFullYear() - birth.getFullYear();
-  if (now.getMonth() - birth.getMonth() < 0 ||
-     (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) age--;
+  if (
+    now.getMonth() - birth.getMonth() < 0 ||
+    (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())
+  )
+    age--;
   return age >= 0 ? age : null;
 }
 
