@@ -140,6 +140,7 @@ function normalizeLearn(input: any): LearningLang[] {
 
 function normalizeStories(input: any): StoryPhoto[] {
   if (!Array.isArray(input)) return [];
+  const now = Date.now();
   const out: StoryPhoto[] = [];
   for (const s of input) {
     const uri = typeof s?.uri === "string" ? s.uri : "";
@@ -149,8 +150,11 @@ function normalizeStories(input: any): StoryPhoto[] {
       typeof s?.id === "string" && s.id.length > 0
         ? s.id
         : `${ts}-${Math.random().toString(16).slice(2)}`;
+    // Preservar expiresAt y filtrar historias ya expiradas
+    const expiresAt = typeof s?.expiresAt === "number" ? s.expiresAt : undefined;
     if (!uri) continue;
-    out.push({ id, uri, title, ts });
+    if (expiresAt && expiresAt <= now) continue; // filtrar expiradas al leer
+    out.push({ id, uri, title, ts, ...(expiresAt ? { expiresAt } : {}) });
   }
   out.sort((a, b) => b.ts - a.ts);
   return out;

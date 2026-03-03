@@ -2,11 +2,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, Pressable, TextInput, FlatList,
-  KeyboardAvoidingView, Platform, Modal, ActivityIndicator, ScrollView, Alert,
+  KeyboardAvoidingView, Platform, Modal, ActivityIndicator, ScrollView,
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
-
-import i18n from "../../../src/i18n";
 import { useThemeMode } from "../../../src/theme";
 import { MATCHES } from "../../../src/mock/matches";
 import { getProfile, getChat, appendChat, getAppLanguage, type ChatMessage } from "../../../src/storage";
@@ -14,10 +12,7 @@ import { generateConversationStarters } from "../../../src/conversation/connecti
 import { blockUser, reportUser, type ReportReason } from "../../../src/safety";
 import { getBotReply } from "../../../src/bots/botReply";
 import { getCulturalTip } from "../../../src/culture/culturalTips";
-import {
-  translateCached,
-  translateWordInContextCached,
-} from "../../../src/translate/autoTranslate";
+import { translateCached, translateWordInContextCached } from "../../../src/translate/autoTranslate";
 import type { LanguageCode } from "../../../src/translate/types";
 import { translatorHealth, getTranslatorBaseUrl } from "../../../src/translate/apiClient";
 
@@ -27,62 +22,64 @@ type WordToken = { token: string; index: number };
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function tokenizeWords(text: string): string[] {
-  return text
-    .split(/(\s+|[,.!?;:()¿¡"""''\-])/g)
-    .filter((t: string) => t !== "" && t !== undefined);
+  return text.split(/(\s+|[,.!?;:()¿¡"""''\-])/g).filter((t) => t !== "" && t !== undefined);
 }
-
 function isOnlyPunctOrSpace(t: string): boolean {
   return !!t.match(/^\s+$/) || !!t.match(/^[,.!?;:()¿¡"""''\-]+$/);
 }
-
 function normalizeUiLang(lang: string | undefined | null): LanguageCode {
-  const raw = (lang ?? "es").toLowerCase();
-  const two = raw.slice(0, 2);
-  if (two === "es") return "es";
-  if (two === "en") return "en";
-  if (two === "de") return "de";
-  if (two === "ja") return "ja";
-  if (two === "ru") return "ru";
-  if (two === "zh") return "zh";
+  const two = (lang ?? "es").toLowerCase().slice(0, 2);
+  if (two === "es") return "es"; if (two === "en") return "en";
+  if (two === "de") return "de"; if (two === "ja") return "ja";
+  if (two === "ru") return "ru"; if (two === "zh") return "zh";
   return "es";
 }
-
 function splitSegments(text: string): string[] {
   const t = text.trim();
   if (!t) return [];
-  const matches = t.match(/[^.!?]+[.!?]*/g);
-  if (!matches) return [t];
-  return matches.map((s: string) => s.trim()).filter(Boolean);
+  const m = t.match(/[^.!?]+[.!?]*/g);
+  return m ? m.map((s) => s.trim()).filter(Boolean) : [t];
 }
 
-function dictLookup(word: string, source: LanguageCode, target: LanguageCode): string | null {
-  const w = word.trim().toLowerCase();
-  if (!w || source !== "en") return null;
-  const EN_TO: Record<LanguageCode, Record<string, string>> = {
-    es: { nice: "encantado / agradable", to: "a / para", meet: "conocer / encontrarse", you: "vos / tú / usted", tell: "contar / decir", me: "me / a mí", about: "sobre / acerca de", your: "tu / tus", city: "ciudad", hobbies: "pasatiempos", and: "y", what: "qué", kind: "tipo / clase", of: "de", friends: "amigos", want: "querer", make: "hacer / crear", hi: "hola", hello: "hola", thanks: "gracias", please: "por favor" },
-    en: {},
-    de: { nice: "nett / schön", to: "zu / nach", meet: "treffen / kennenlernen", you: "du / Sie", tell: "erzählen / sagen", me: "mir / mich", about: "über", your: "dein / Ihr", city: "Stadt", hobbies: "Hobbys", and: "und", what: "was", kind: "Art / Sorte", of: "von", friends: "Freunde", want: "wollen / möchten", make: "machen", hi: "hi / hallo", hello: "hallo", thanks: "danke", please: "bitte" },
-    ru: { nice: "приятно", to: "к / чтобы", meet: "встретиться / познакомиться", you: "ты / вы", tell: "рассказать / сказать", me: "мне / меня", about: "о / про", your: "твой / ваш", city: "город", hobbies: "хобби", and: "и", what: "что / какой", kind: "вид / тип", of: "из / о", friends: "друзья", want: "хотеть", make: "делать / заводить", hi: "привет", hello: "здравствуйте / привет", thanks: "спасибо", please: "пожалуйста" },
-    ja: { nice: "うれしい / いい", to: "〜へ / 〜するために", meet: "会う / 出会う", you: "あなた", tell: "話す / 教える", me: "私に", about: "〜について", your: "あなたの", city: "街 / 市", hobbies: "趣味", and: "そして / と", what: "何 / どんな", kind: "種類", of: "の", friends: "友達", want: "欲しい / したい", make: "作る / なる", hi: "やあ / こんにちは", hello: "こんにちは", thanks: "ありがとう", please: "お願いします" },
-    zh: { nice: "很高兴 / 不错", to: "去 / 为了", meet: "见面 / 认识", you: "你 / 您", tell: "告诉 / 讲", me: "我 / 告诉我", about: "关于", your: "你的 / 您的", city: "城市", hobbies: "爱好", and: "和 / 以及", what: "什么", kind: "种类", of: "的", friends: "朋友", want: "想要", make: "做 / 交(朋友)", hi: "嗨 / 你好", hello: "你好", thanks: "谢谢", please: "请 / 麻烦" },
-  };
-  const table = EN_TO[target];
-  if (!table) return null;
-  const cleaned = w.replace(/^[,.!?;:()¿¡"""''\-]+|[,.!?;:()¿¡"""''\-]+$/g, "");
-  return table[cleaned] ?? null;
-}
+// ─── Icebreakers bilingüe: texto en idioma del match + traducción en español ──
+type StarterItem = { id: string; textNative: string; textEs: string };
 
-function starterTemplates(nativeLang: LanguageCode, name: string, country: string): string[] {
+function starterTemplatesNative(nativeLang: LanguageCode, name: string, country: string): { native: string; es: string }[] {
   switch (nativeLang) {
-    case "de": return [`Hi ${name}! Was magst du am meisten an ${country}?`, `Welche typischen Gerichte aus ${country} empfiehlst du?`, `Was sind deine Hobbys?`];
-    case "ru": return [`Привет, ${name}! Что тебе больше всего нравится в ${country}?`, `Какую местную еду в ${country} ты посоветуешь?`, `Какие у тебя хобби?`];
-    case "ja": return [`こんにちは、${name}！${country}で一番好きなところは？`, `${country}のおすすめの食べ物は？`, `趣味は何？`];
-    case "zh": return [`你好，${name}！你最喜欢${country}的什么？`, `你推荐${country}的美食是什么？`, `你有什么爱好？`];
-    case "en": return [`Hey ${name}! What do you like most about ${country}?`, `What food from ${country} should I try?`, `What are your hobbies?`];
-    default:   return [`¡Hola ${name}! ¿Qué te gusta de vivir en ${country}?`, `¿Qué comida de ${country} recomendás?`, `¿Qué hobbies tenés?`];
+    case "de": return [
+      { native: `Hi ${name}! Was magst du am meisten an ${country}?`, es: `¡Hola ${name}! ¿Qué es lo que más te gusta de ${country}?` },
+      { native: `Welche Gerichte aus ${country} empfiehlst du?`, es: `¿Qué comidas de ${country} recomendás?` },
+      { native: `Was sind deine Hobbys?`, es: `¿Cuáles son tus hobbies?` },
+    ];
+    case "ru": return [
+      { native: `Привет, ${name}! Что тебе нравится в ${country}?`, es: `¡Hola ${name}! ¿Qué te gusta de ${country}?` },
+      { native: `Какую еду в ${country} посоветуешь?`, es: `¿Qué comida de ${country} recomendás?` },
+      { native: `Какие у тебя хобби?`, es: `¿Cuáles son tus hobbies?` },
+    ];
+    case "ja": return [
+      { native: `こんにちは、${name}！${country}で好きなところは？`, es: `¡Hola ${name}! ¿Qué parte de ${country} te gusta más?` },
+      { native: `${country}のおすすめ食べ物は？`, es: `¿Qué comida de ${country} recomendás?` },
+      { native: `趣味は何ですか？`, es: `¿Cuáles son tus hobbies?` },
+    ];
+    case "zh": return [
+      { native: `你好，${name}！你最喜欢${country}的什么？`, es: `¡Hola ${name}! ¿Qué es lo que más te gusta de ${country}?` },
+      { native: `你推荐${country}的美食是什么？`, es: `¿Qué comida de ${country} recomendás?` },
+      { native: `你有什么爱好？`, es: `¿Cuáles son tus hobbies?` },
+    ];
+    case "en": return [
+      { native: `Hey ${name}! What do you like most about ${country}?`, es: `¿Qué es lo que más te gusta de ${country}?` },
+      { native: `What food from ${country} should I try?`, es: `¿Qué comida de ${country} debería probar?` },
+      { native: `What are your hobbies?`, es: `¿Cuáles son tus hobbies?` },
+    ];
+    default: return [
+      { native: `¡Hola ${name}! ¿Qué te gusta de vivir en ${country}?`, es: `¿Qué te gusta de vivir en ${country}?` },
+      { native: `¿Qué comida de ${country} recomendás?`, es: `¿Qué comida recomendás?` },
+      { native: `¿Qué hobbies tenés?`, es: `¿Qué hobbies tenés?` },
+    ];
   }
 }
+
+// ─── Screen ─────────────────────────────────────────────────────────────────
 
 export default function ChatScreen() {
   const router = useRouter();
@@ -105,47 +102,62 @@ export default function ChatScreen() {
   const [showStarters, setShowStarters] = useState(true);
   const [uiLang, setUiLang] = useState<LanguageCode>("es");
   const [openWord, setOpenWord] = useState(false);
-  const [activeSentence, setActiveSentence] = useState<string>("");
+  const [activeSentence, setActiveSentence] = useState("");
   const [activeSourceLang, setActiveSourceLang] = useState<LanguageCode>("en");
   const [wordTokens, setWordTokens] = useState<WordToken[]>([]);
-  const [selectedToken, setSelectedToken] = useState<string>("");
-  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
-  const [wordMeaning, setWordMeaning] = useState<string>("");
+  const [selectedToken, setSelectedToken] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [wordMeaning, setWordMeaning] = useState("");
   const [meaningLoading, setMeaningLoading] = useState(false);
-  const [sentenceMeaning, setSentenceMeaning] = useState<string>("");
+  const [sentenceMeaning, setSentenceMeaning] = useState("");
   const [sentenceLoading, setSentenceLoading] = useState(false);
   const [tokenMeanings, setTokenMeanings] = useState<Record<number, string>>({});
   const [translatorOk, setTranslatorOk] = useState<boolean | null>(null);
-  const [translatorErr, setTranslatorErr] = useState<string>("");
+  const [translatorErr, setTranslatorErr] = useState("");
 
-  const botLang: LanguageCode = ((match?.nativeLang ?? "en") as LanguageCode);
+  const botLang: LanguageCode = (match?.nativeLang ?? "en") as LanguageCode;
 
-  const starters = useMemo(() => {
+  const starters = useMemo<StarterItem[]>(() => {
     const name = match?.name ?? "friend";
     const country = match?.country ?? "";
     const lang = botLang;
-    let engineTexts: string[] = [];
+
+    const templates = starterTemplatesNative(lang, name, country);
+    const tip = getCulturalTip(country);
+
+    const all: StarterItem[] = [];
+
+    if (tip) {
+      const tipNative: Record<string, string> = {
+        de: `Ich habe gelesen: "${tip}". Stimmt das?`,
+        ru: `Я читал(а): "${tip}". Это правда?`,
+        ja: `「${tip}」って本当？`,
+        zh: `"${tip}"，对吗？`,
+        en: `I read: "${tip}". Is that true?`,
+        es: `Leí: "${tip}". ¿Es así?`,
+      };
+      all.push({
+        id: "tip",
+        textNative: tipNative[lang] ?? tipNative.es,
+        textEs: `Dato cultural sobre ${country}: "${tip}"`,
+      });
+    }
+
+    templates.forEach((t, i) => all.push({ id: `t${i}`, textNative: t.native, textEs: t.es }));
+
     if (meProfile && match) {
-      try { engineTexts = generateConversationStarters(meProfile, match); } catch {}
+      try {
+        const engine = generateConversationStarters(meProfile, match);
+        engine.forEach((e, i) => all.push({ id: `e${i}`, textNative: e, textEs: e }));
+      } catch {}
     }
-    const [a, b, c] = starterTemplates(lang, name, country);
-    const tip = typeof getCulturalTip === "function" ? getCulturalTip(country) : null;
-    const tipMap: Record<string, string> = {
-      de: `Ich habe über ${country} gelesen: "${tip}". Stimmt das?`,
-      ru: `Я прочитал(а) про ${country}: "${tip}". Это правда?`,
-      ja: `${country}について「${tip}」って読んだけど、本当？`,
-      zh: `我看到关于${country}的一句话："${tip}"。对吗？`,
-      en: `I read this about ${country}: "${tip}". Is it true?`,
-      es: `Leí esto sobre ${country}: "${tip}". ¿Es así?`,
-    };
-    const all: string[] = [...(tip ? [tipMap[lang] ?? tipMap.es] : []), a, b, c, ...engineTexts];
+
     const seen = new Set<string>();
-    const deduped: string[] = [];
-    for (const t of all) {
-      if (!seen.has(t)) { seen.add(t); deduped.push(t); }
-      if (deduped.length >= 5) break;
-    }
-    return deduped.map((t, i) => ({ id: String(i), text: t }));
+    return all.filter((s) => {
+      if (seen.has(s.textNative)) return false;
+      seen.add(s.textNative);
+      return true;
+    }).slice(0, 5);
   }, [match, meProfile, botLang]);
 
   useEffect(() => {
@@ -157,11 +169,11 @@ export default function ChatScreen() {
       const history = await getChat(matchId);
       if (history.length === 0 && match) {
         setBotTyping(true);
-        const opening = await getBotReply(match, [], "Hola! Acabo de conectarme.").catch(() => null);
+        const opening = await getBotReply(match, [], "Hola!").catch(() => null);
         setBotTyping(false);
         if (opening) {
-          const initialized = await appendChat(matchId, { from: "them", text: opening });
-          setMsgs(initialized);
+          const init = await appendChat(matchId, { from: "them", text: opening });
+          setMsgs(init);
         }
       } else {
         setMsgs(history);
@@ -169,7 +181,7 @@ export default function ChatScreen() {
       }
       const ok = await translatorHealth();
       setTranslatorOk(ok);
-      setTranslatorErr(ok ? "" : `Traductor no disponible. URL: ${getTranslatorBaseUrl()}`);
+      setTranslatorErr(ok ? "" : `Traductor no disponible`);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 50);
     })();
   }, [matchId]);
@@ -202,27 +214,21 @@ export default function ChatScreen() {
         const currentHistory = await getChat(matchId);
         const reply = await getBotReply(match, currentHistory, raw);
         await addMessage("them", reply);
-        setTranslatorOk(true);
-        setTranslatorErr("");
-      } catch (e: any) {
-        const fallbacks: Record<LanguageCode, string> = { de: "Das ist interessant! Erzähl mir mehr.", ja: "なるほど！もっと教えてください。", zh: "很有意思！告诉我更多吧。", ru: "Интересно! Расскажи мне больше.", en: "That's interesting! Tell me more.", es: "¡Qué interesante! Contame más." };
+        setTranslatorOk(true); setTranslatorErr("");
+      } catch {
+        const fallbacks: Record<LanguageCode, string> = {
+          de: "Das ist interessant!", ja: "なるほど！", zh: "很有意思！",
+          ru: "Интересно!", en: "Interesting!", es: "¡Qué interesante!",
+        };
         await addMessage("them", fallbacks[botLang] ?? fallbacks.en);
-        setTranslatorOk(false);
-        setTranslatorErr(String(e?.message ?? e));
-      } finally {
-        setBotTyping(false);
-      }
+      } finally { setBotTyping(false); }
     }, 800 + Math.random() * 1200);
-  }
-
-  function getSourceLangForMessage(from: "me" | "them"): LanguageCode {
-    return from === "them" ? botLang : uiLang;
   }
 
   function openTranslatorSheet(sentenceText: string, tappedToken: string, from: "me" | "them") {
     const cleanToken = tappedToken.trim();
     if (!cleanToken || isOnlyPunctOrSpace(cleanToken)) return;
-    const src = getSourceLangForMessage(from);
+    const src = from === "them" ? botLang : uiLang;
     const all = tokenizeWords(sentenceText);
     const words: WordToken[] = [];
     for (let i = 0; i < all.length; i++) {
@@ -230,7 +236,7 @@ export default function ChatScreen() {
       if (!c || isOnlyPunctOrSpace(c)) continue;
       words.push({ token: c, index: i });
     }
-    const first = words.findIndex((w: WordToken) => w.token.toLowerCase() === cleanToken.toLowerCase());
+    const first = words.findIndex((w) => w.token.toLowerCase() === cleanToken.toLowerCase());
     const safePos = first >= 0 ? first : 0;
     setActiveSentence(sentenceText);
     setActiveSourceLang(src);
@@ -238,9 +244,7 @@ export default function ChatScreen() {
     const initial = words[safePos] ?? { token: cleanToken, index: -1 };
     setSelectedToken(initial.token);
     setSelectedIndex(initial.index);
-    setWordMeaning("");
-    setSentenceMeaning("");
-    setTokenMeanings({});
+    setWordMeaning(""); setSentenceMeaning(""); setTokenMeanings({});
     setOpenWord(true);
     if (initial.index >= 0) void translateOneToken(initial, src);
   }
@@ -252,22 +256,22 @@ export default function ChatScreen() {
     setMeaningLoading(true);
     setWordMeaning("");
     try {
-      const dict = dictLookup(wt.token, sourceLang, uiLang);
-      if (dict) { setWordMeaning(dict); setTokenMeanings((p) => ({ ...p, [wt.index]: dict })); return; }
-      let contextual: string | null = null;
+      let result: string | null = null;
       try {
-        const res: any = await translateWordInContextCached({ fullText: activeSentence, tappedTokenIndex: wt.index, sourceLang, targetLang: uiLang });
-        contextual = (res?.tappedMeaning && String(res.tappedMeaning).trim()) || (res?.translatedWord && String(res.translatedWord).trim()) || null;
+        const res: any = await translateWordInContextCached({
+          fullText: activeSentence, tappedTokenIndex: wt.index, sourceLang, targetLang: uiLang,
+        });
+        result = (res?.tappedMeaning && String(res.tappedMeaning).trim()) ||
+          (res?.translatedWord && String(res.translatedWord).trim()) || null;
       } catch {}
-      if (contextual) { setWordMeaning(contextual); setTokenMeanings((p) => ({ ...p, [wt.index]: contextual! })); return; }
-      const translated = await translateCached({ text: wt.token, targetLang: uiLang, sourceLang });
-      const finalText = (translated ?? "").trim() || "—";
-      setWordMeaning(finalText);
-      setTokenMeanings((p) => ({ ...p, [wt.index]: finalText }));
-      setTranslatorOk(true); setTranslatorErr("");
-    } catch (e: any) {
-      setWordMeaning("No se pudo traducir. Reintentá.");
-      setTranslatorOk(false); setTranslatorErr(String(e?.message ?? e));
+      if (!result) {
+        const t = await translateCached({ text: wt.token, targetLang: uiLang, sourceLang });
+        result = (t ?? "").trim() || "—";
+      }
+      setWordMeaning(result ?? "—");
+      setTokenMeanings((p) => ({ ...p, [wt.index]: result ?? "—" }));
+    } catch {
+      setWordMeaning("No se pudo traducir.");
     } finally { setMeaningLoading(false); }
   }
 
@@ -282,45 +286,127 @@ export default function ChatScreen() {
         parts.push((t ?? "").trim());
       }
       setSentenceMeaning(parts.filter(Boolean).join(" ").trim() || "—");
-      setTranslatorOk(true); setTranslatorErr("");
-    } catch (e: any) {
-      setSentenceMeaning("No se pudo traducir la oración.");
-      setTranslatorOk(false); setTranslatorErr(String(e?.message ?? e));
+    } catch {
+      setSentenceMeaning("No se pudo traducir.");
     } finally { setSentenceLoading(false); }
   }
+
+  const LANG_FLAG: Record<LanguageCode, string> = { es: "🇦🇷", en: "🇺🇸", de: "🇩🇪", ja: "🇯🇵", ru: "🇷🇺", zh: "🇨🇳" };
+  const LANG_NAME: Record<LanguageCode, string> = { es: "ES", en: "EN", de: "DE", ja: "JA", ru: "RU", zh: "ZH" };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <View style={{ paddingTop: Platform.OS === "ios" ? 54 : 22, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.bg }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <Pressable onPress={() => router.back()} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}>
-            <Text style={{ color: colors.fg, fontWeight: "900" }}>←</Text>
+      {/* ── HEADER ─────────────────────────────────────────────────────── */}
+      <View style={{
+        paddingTop: Platform.OS === "ios" ? 58 : 24,
+        paddingHorizontal: 16,
+        paddingBottom: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+        backgroundColor: colors.bg,
+      }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <Pressable onPress={() => router.back()} style={{
+            width: 40, height: 40, borderRadius: 20,
+            borderWidth: 1, borderColor: colors.border,
+            backgroundColor: colors.card,
+            alignItems: "center", justifyContent: "center",
+          }}>
+            <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 18 }}>←</Text>
           </Pressable>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 18 }} numberOfLines={1}>{match?.name ?? "Chat"}{match?.country ? ` • ${match.country}` : ""}</Text>
-            <Text style={{ color: colors.fg, opacity: 0.7, fontWeight: "700" }} numberOfLines={1}>{botTyping ? "escribiendo…" : `Tap para traducir • ${String(botLang).toUpperCase()}`}</Text>
-            {translatorOk === false && <Text style={{ color: "#ff6b6b", opacity: 0.9, marginTop: 2, fontWeight: "800" }}>⚠️ {translatorErr}</Text>}
+
+          {/* Avatar circular con inicial */}
+          <View style={{
+            width: 40, height: 40, borderRadius: 20,
+            backgroundColor: colors.accent,
+            alignItems: "center", justifyContent: "center",
+          }}>
+            <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>
+              {(match?.name ?? "?")[0].toUpperCase()}
+            </Text>
           </View>
-          <Pressable onPress={() => setShowStarters((v) => !v)} style={{ paddingHorizontal: 11, paddingVertical: 7, borderRadius: 10, borderWidth: 1, borderColor: showStarters ? colors.accent : colors.border, backgroundColor: showStarters ? colors.accentSoft : colors.card }}>
-            <Text style={{ color: showStarters ? colors.accent : colors.fg, fontWeight: "900", fontSize: 13 }}>Ice</Text>
+
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 17 }} numberOfLines={1}>
+              {match?.name ?? "Chat"}
+              <Text style={{ opacity: 0.45, fontSize: 13, fontWeight: "700" }}>
+                {match?.country ? `  ${match.country}` : ""}
+              </Text>
+            </Text>
+            <Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "700", fontSize: 12 }}>
+              {botTyping ? "✍️ escribiendo…" : `${LANG_FLAG[botLang]} ${LANG_NAME[botLang]} · tocá una palabra para traducir`}
+            </Text>
+          </View>
+
+          {/* Botón Icebreakers */}
+          <Pressable onPress={() => setShowStarters((v) => !v)} style={{
+            paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12,
+            borderWidth: 1,
+            borderColor: showStarters ? colors.accent : colors.border,
+            backgroundColor: showStarters ? colors.accentSoft : colors.card,
+          }}>
+            <Text style={{ fontSize: 16 }}>🧊</Text>
           </Pressable>
-          <Pressable onPress={() => setOpenSafety(true)} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}>
-            <Text style={{ color: "#ff3b30", fontWeight: "900", fontSize: 16 }}>⚠</Text>
+
+          {/* Seguridad */}
+          <Pressable onPress={() => setOpenSafety(true)} style={{
+            width: 36, height: 36, borderRadius: 18,
+            borderWidth: 1, borderColor: colors.border,
+            backgroundColor: colors.card,
+            alignItems: "center", justifyContent: "center",
+          }}>
+            <Text style={{ fontSize: 16 }}>🚨</Text>
           </Pressable>
         </View>
 
+        {/* Error traductor */}
+        {translatorOk === false && (
+          <View style={{ marginTop: 8, backgroundColor: "#ff3b3015", borderRadius: 10, padding: 8 }}>
+            <Text style={{ color: "#ff3b30", fontSize: 12, fontWeight: "700" }}>⚠ {translatorErr}</Text>
+          </View>
+        )}
+
+        {/* ── ICEBREAKERS ──────────────────────────────────────────────── */}
         {showStarters && starters.length > 0 && (
-          <View style={{ marginTop: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 16, overflow: "hidden", backgroundColor: colors.card }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-              <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 13 }}>Mensajes para empezar</Text>
-              <Pressable onPress={() => setShowStarters(false)}><Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "900" }}>Cerrar</Text></Pressable>
+          <View style={{
+            marginTop: 12,
+            borderWidth: 1, borderColor: colors.border,
+            borderRadius: 18, overflow: "hidden",
+            backgroundColor: colors.card,
+          }}>
+            <View style={{
+              flexDirection: "row", justifyContent: "space-between",
+              alignItems: "center", paddingHorizontal: 14, paddingVertical: 10,
+              borderBottomWidth: 1, borderBottomColor: colors.border,
+            }}>
+              <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 12, letterSpacing: 0.5, opacity: 0.6 }}>
+                🧊 ICEBREAKERS
+              </Text>
+              <Pressable onPress={() => setShowStarters(false)}>
+                <Text style={{ color: colors.fg, opacity: 0.4, fontWeight: "700", fontSize: 12 }}>Cerrar ✕</Text>
+              </Pressable>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: 10, gap: 8 }}>
               {starters.map((s) => (
-                <Pressable key={s.id} onPress={() => onSend(s.text)} style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.accentSoft, maxWidth: 260 }}>
-                  <Text style={{ color: colors.fg, fontWeight: "900" }} numberOfLines={2}>{s.text}</Text>
+                <Pressable key={s.id} onPress={() => onSend(s.textNative)} style={{
+                  paddingVertical: 10, paddingHorizontal: 14,
+                  borderRadius: 14, borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.bg,
+                  maxWidth: 240, gap: 4,
+                }}>
+                  {/* Texto en idioma nativo (lo que se envía) */}
+                  <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 13 }} numberOfLines={2}>
+                    {s.textNative}
+                  </Text>
+                  {/* Traducción al español (para que el usuario entienda) */}
+                  {s.textEs !== s.textNative && (
+                    <Text style={{ color: colors.accent, fontWeight: "700", fontSize: 11 }} numberOfLines={1}>
+                      → {s.textEs}
+                    </Text>
+                  )}
                 </Pressable>
               ))}
             </ScrollView>
@@ -328,102 +414,265 @@ export default function ChatScreen() {
         )}
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}>
+      {/* ── CHAT ───────────────────────────────────────────────────────── */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+      >
         <FlatList
-          ref={listRef} data={msgs} keyExtractor={(m) => m.id}
+          ref={listRef}
+          data={msgs}
+          keyExtractor={(m) => m.id}
           contentContainerStyle={{ padding: 16, paddingBottom: 12 }}
           showsVerticalScrollIndicator={false}
           ListFooterComponent={botTyping ? (
-            <View style={{ alignSelf: "flex-start", marginBottom: 10, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: colors.card, borderRadius: 18, borderWidth: 1, borderColor: colors.border }}>
+            <View style={{
+              alignSelf: "flex-start", marginBottom: 10,
+              paddingHorizontal: 16, paddingVertical: 12,
+              backgroundColor: colors.card,
+              borderRadius: 18, borderTopLeftRadius: 4,
+              borderWidth: 1, borderColor: colors.border,
+            }}>
               <ActivityIndicator size="small" color={colors.accent} />
             </View>
           ) : null}
           renderItem={({ item }) => (
-            <Bubble item={item} colors={colors} onWordPress={(token: string) => openTranslatorSheet(item.text, token, item.from)} />
+            <Bubble
+              item={item}
+              colors={colors}
+              onWordPress={(token) => openTranslatorSheet(item.text, token, item.from)}
+            />
           )}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         />
 
-        <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg, flexDirection: "row", gap: 10, alignItems: "flex-end" }}>
-          <Pressable onPress={() => { const last = [...msgs].reverse().find((m) => m.from === "them"); if (last) openTranslatorSheet(last.text, last.text.split(" ")[0], "them"); }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontSize: 18 }}>🔤</Text>
+        {/* ── INPUT ──────────────────────────────────────────────────── */}
+        <View style={{
+          paddingHorizontal: 12, paddingVertical: 10,
+          borderTopWidth: 1, borderTopColor: colors.border,
+          backgroundColor: colors.bg,
+          flexDirection: "row", gap: 8, alignItems: "flex-end",
+        }}>
+          {/* Botón traductor del último mensaje */}
+          <Pressable
+            onPress={() => {
+              const last = [...msgs].reverse().find((m) => m.from === "them");
+              if (last) openTranslatorSheet(last.text, last.text.split(" ")[0], "them");
+            }}
+            style={{
+              width: 44, height: 44, borderRadius: 22,
+              backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+              alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <Text style={{ fontSize: 20 }}>🔤</Text>
           </Pressable>
-          <TextInput value={text} onChangeText={setText} placeholder={`Escribí en ${botLang.toUpperCase()}…`} placeholderTextColor={colors.fg + "88"} multiline style={{ flex: 1, minHeight: 44, maxHeight: 120, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, color: colors.fg, fontWeight: "700" }} />
-          <Pressable onPress={() => onSend()} disabled={!text.trim() || botTyping} style={{ paddingHorizontal: 14, paddingVertical: 12, borderRadius: 16, backgroundColor: text.trim() && !botTyping ? colors.accent : colors.border, alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ color: "white", fontWeight: "900" }}>↑</Text>
+
+          <TextInput
+            value={text}
+            onChangeText={setText}
+            placeholder={`Escribí en ${LANG_NAME[botLang]}…`}
+            placeholderTextColor={colors.fg + "55"}
+            multiline
+            style={{
+              flex: 1, minHeight: 44, maxHeight: 120,
+              paddingHorizontal: 14, paddingVertical: 10,
+              borderRadius: 22, borderWidth: 1, borderColor: colors.border,
+              backgroundColor: colors.card, color: colors.fg, fontWeight: "600",
+              fontSize: 15,
+            }}
+          />
+          <Pressable
+            onPress={() => onSend()}
+            disabled={!text.trim() || botTyping}
+            style={{
+              width: 44, height: 44, borderRadius: 22,
+              backgroundColor: text.trim() && !botTyping ? colors.accent : colors.border,
+              alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <Text style={{ color: "white", fontWeight: "900", fontSize: 18 }}>↑</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
 
-      <Modal visible={openWord} transparent animationType="fade">
-        <Pressable onPress={() => setOpenWord(false)} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }}>
-          <Pressable onPress={() => {}} style={{ backgroundColor: colors.card, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, borderWidth: 1, borderColor: colors.border, maxHeight: "82%" }}>
-            <View style={{ alignSelf: "center", width: 46, height: 5, borderRadius: 999, backgroundColor: colors.border, marginBottom: 10 }} />
+      {/* ── MODAL TRADUCTOR ────────────────────────────────────────────── */}
+      <Modal visible={openWord} transparent animationType="slide">
+        <Pressable
+          onPress={() => setOpenWord(false)}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}
+        >
+          <Pressable onPress={() => {}} style={{
+            backgroundColor: colors.bg,
+            borderTopLeftRadius: 28, borderTopRightRadius: 28,
+            padding: 20,
+            borderTopWidth: 1, borderColor: colors.border,
+            maxHeight: "88%",
+          }}>
+            {/* Handle */}
+            <View style={{
+              alignSelf: "center", width: 40, height: 4,
+              borderRadius: 2, backgroundColor: colors.border, marginBottom: 16,
+            }} />
+
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={{ color: colors.fg, fontWeight: "900", opacity: 0.75, marginBottom: 6 }}>Oración original</Text>
-              <View style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, borderRadius: 16, padding: 12 }}>
-                <Text style={{ color: colors.fg, fontWeight: "800" }}>{activeSentence || "—"}</Text>
+              {/* Oración original */}
+              <Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "800", fontSize: 11, letterSpacing: 1, marginBottom: 8 }}>
+                ORACIÓN ORIGINAL
+              </Text>
+              <View style={{
+                backgroundColor: colors.card, borderRadius: 14,
+                borderWidth: 1, borderColor: colors.border,
+                padding: 14, marginBottom: 20,
+              }}>
+                <Text style={{ color: colors.fg, fontWeight: "700", lineHeight: 22 }}>{activeSentence || "—"}</Text>
               </View>
-              <View style={{ marginTop: 14 }}>
-                <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 22 }}>{selectedToken || "—"}</Text>
-                <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  {meaningLoading && <ActivityIndicator />}
-                  <Text style={{ color: colors.fg, opacity: 0.9, fontWeight: "700", flex: 1, fontSize: 15 }}>{meaningLoading ? "Buscando significado…" : wordMeaning || "—"}</Text>
-                </View>
+
+              {/* Palabra seleccionada + significado */}
+              <View style={{
+                backgroundColor: colors.accentSoft,
+                borderRadius: 16, borderWidth: 1, borderColor: colors.accent + "40",
+                padding: 16, marginBottom: 16,
+              }}>
+                <Text style={{ color: colors.accent, fontWeight: "900", fontSize: 26, marginBottom: 6 }}>
+                  {selectedToken || "—"}
+                </Text>
+                {meaningLoading ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <ActivityIndicator size="small" color={colors.accent} />
+                    <Text style={{ color: colors.fg, opacity: 0.6, fontWeight: "600" }}>Traduciendo…</Text>
+                  </View>
+                ) : (
+                  <Text style={{ color: colors.fg, fontWeight: "700", fontSize: 16 }}>
+                    {wordMeaning || "—"}
+                  </Text>
+                )}
               </View>
-              <Pressable onPress={translateWholeSentence} style={{ marginTop: 14, paddingVertical: 14, borderRadius: 16, backgroundColor: colors.accent, alignItems: "center" }}>
-                <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>{sentenceLoading ? "Traduciendo…" : "Traducir toda la oración"}</Text>
-              </Pressable>
-              <Text style={{ marginTop: 16, color: colors.fg, fontWeight: "900", opacity: 0.9 }}>Palabra por palabra</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 10, gap: 10 }}>
-                {wordTokens.map((wt: WordToken) => {
+
+              {/* Palabra por palabra */}
+              <Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "800", fontSize: 11, letterSpacing: 1, marginBottom: 10 }}>
+                PALABRA POR PALABRA
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginBottom: 20 }}>
+                {wordTokens.map((wt) => {
                   const active = wt.index === selectedIndex;
+                  const meaning = tokenMeanings[wt.index];
                   return (
-                    <Pressable key={`${wt.index}-${wt.token}`} onPress={() => translateOneToken(wt, activeSourceLang)} style={{ paddingVertical: 10, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accentSoft : colors.bg, minWidth: 90, maxWidth: 180 }}>
-                      <Text style={{ color: colors.fg, fontWeight: "900" }} numberOfLines={1}>{wt.token}</Text>
-                      <Text style={{ color: colors.fg, opacity: 0.75, fontWeight: "800", marginTop: 4 }} numberOfLines={2}>{tokenMeanings[wt.index] ?? "—"}</Text>
+                    <Pressable
+                      key={`${wt.index}-${wt.token}`}
+                      onPress={() => translateOneToken(wt, activeSourceLang)}
+                      style={{
+                        paddingVertical: 10, paddingHorizontal: 14,
+                        borderRadius: 14, borderWidth: 1,
+                        borderColor: active ? colors.accent : colors.border,
+                        backgroundColor: active ? colors.accentSoft : colors.card,
+                        minWidth: 80, maxWidth: 160, alignItems: "center",
+                      }}
+                    >
+                      <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 15 }} numberOfLines={1}>
+                        {wt.token}
+                      </Text>
+                      {meaning ? (
+                        <Text style={{ color: colors.accent, fontWeight: "700", fontSize: 11, marginTop: 4 }} numberOfLines={2}>
+                          {meaning}
+                        </Text>
+                      ) : (
+                        <Text style={{ color: colors.fg, opacity: 0.3, fontSize: 11, marginTop: 4 }}>—</Text>
+                      )}
                     </Pressable>
                   );
                 })}
               </ScrollView>
-              <Text style={{ marginTop: 6, color: colors.fg, fontWeight: "900", opacity: 0.9 }}>Traducción completa</Text>
-              <View style={{ marginTop: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, borderRadius: 16, padding: 14 }}>
-                {sentenceLoading ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><ActivityIndicator /><Text style={{ color: colors.fg, fontWeight: "800" }}>Traduciendo…</Text></View>
-                ) : (
-                  <Text style={{ color: colors.fg, fontWeight: "800" }}>{sentenceMeaning || "—"}</Text>
-                )}
-              </View>
-              <View style={{ flexDirection: "row", gap: 10, marginTop: 14, marginBottom: 8 }}>
-                <Pressable onPress={() => { const wt = wordTokens.find((x: WordToken) => x.index === selectedIndex); if (wt) translateOneToken(wt, activeSourceLang); }} style={{ flex: 1, paddingVertical: 12, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, alignItems: "center" }}>
-                  <Text style={{ color: colors.fg, fontWeight: "900" }}>Reintentar</Text>
-                </Pressable>
-                <Pressable onPress={() => setOpenWord(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center" }}>
-                  <Text style={{ color: colors.fg, fontWeight: "900" }}>Cerrar</Text>
-                </Pressable>
-              </View>
+
+              {/* Traducir toda la oración */}
+              <Pressable
+                onPress={translateWholeSentence}
+                style={{
+                  paddingVertical: 14, borderRadius: 16,
+                  backgroundColor: colors.accent, alignItems: "center", marginBottom: 12,
+                }}
+              >
+                <Text style={{ color: "white", fontWeight: "900", fontSize: 15 }}>
+                  {sentenceLoading ? "Traduciendo…" : "Traducir oración completa"}
+                </Text>
+              </Pressable>
+
+              {sentenceMeaning ? (
+                <View style={{
+                  backgroundColor: colors.card, borderRadius: 14,
+                  borderWidth: 1, borderColor: colors.border, padding: 14, marginBottom: 16,
+                }}>
+                  <Text style={{ color: colors.fg, fontWeight: "700", lineHeight: 22 }}>{sentenceMeaning}</Text>
+                </View>
+              ) : null}
+
+              <Pressable onPress={() => setOpenWord(false)} style={{
+                paddingVertical: 14, borderRadius: 16,
+                borderWidth: 1, borderColor: colors.border,
+                backgroundColor: colors.card, alignItems: "center",
+              }}>
+                <Text style={{ color: colors.fg, fontWeight: "700" }}>Cerrar</Text>
+              </Pressable>
             </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
 
-      <Modal visible={openSafety} transparent animationType="fade">
-        <Pressable onPress={() => setOpenSafety(false)} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }}>
-          <Pressable onPress={() => {}} style={{ backgroundColor: colors.card, padding: 16, borderTopLeftRadius: 18, borderTopRightRadius: 18, borderWidth: 1, borderColor: colors.border }}>
-            <Text style={{ color: colors.fg, fontSize: 18, fontWeight: "900" }}>Seguridad</Text>
-            <Text style={{ color: colors.fg, opacity: 0.7, marginTop: 6, fontWeight: "700" }}>Denunciá o bloqueá en 1 toque.</Text>
-            <View style={{ marginTop: 12, gap: 10 }}>
+      {/* ── MODAL SEGURIDAD ─────────────────────────────────────────────── */}
+      <Modal visible={openSafety} transparent animationType="slide">
+        <Pressable
+          onPress={() => setOpenSafety(false)}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}
+        >
+          <Pressable onPress={() => {}} style={{
+            backgroundColor: colors.bg, padding: 20,
+            borderTopLeftRadius: 24, borderTopRightRadius: 24,
+            borderTopWidth: 1, borderColor: colors.border,
+          }}>
+            <Text style={{ color: colors.fg, fontSize: 20, fontWeight: "900", marginBottom: 4 }}>Seguridad</Text>
+            <Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "600", marginBottom: 16, fontSize: 13 }}>
+              Denunciá o bloqueá con un toque.
+            </Text>
+            <View style={{ gap: 10 }}>
               {(["spam", "acoso", "contenido_sexual", "odio", "estafa", "otro"] as ReportReason[]).map((k) => (
-                <Pressable key={k} onPress={async () => { await reportUser({ id: matchId, reason: k, note: reportNote?.trim() || undefined }); setOpenSafety(false); }} style={{ padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg }}>
-                  <Text style={{ color: colors.fg, fontWeight: "900" }}>Denunciar: {k.replace("_", " ")}</Text>
+                <Pressable key={k}
+                  onPress={async () => {
+                    await reportUser({ id: matchId, reason: k, note: reportNote?.trim() || undefined });
+                    setOpenSafety(false);
+                  }}
+                  style={{
+                    padding: 14, borderRadius: 14,
+                    borderWidth: 1, borderColor: colors.border,
+                    backgroundColor: colors.card,
+                  }}>
+                  <Text style={{ color: colors.fg, fontWeight: "800" }}>
+                    Denunciar: {k.replace("_", " ")}
+                  </Text>
                 </Pressable>
               ))}
-              <TextInput value={reportNote} onChangeText={setReportNote} placeholder="Nota opcional (qué pasó)" placeholderTextColor={colors.fg + "88"} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 14, backgroundColor: colors.bg, color: colors.fg, fontWeight: "700" }} />
-              <Pressable onPress={async () => { await blockUser(matchId); setOpenSafety(false); router.replace("/(tabs)/home"); }} style={{ padding: 14, borderRadius: 14, backgroundColor: "#ff3b30" }}>
-                <Text style={{ color: "#fff", fontWeight: "900", textAlign: "center" }}>Bloquear y salir</Text>
+              <TextInput
+                value={reportNote} onChangeText={setReportNote}
+                placeholder="Nota opcional…"
+                placeholderTextColor={colors.fg + "55"}
+                style={{
+                  borderWidth: 1, borderColor: colors.border, borderRadius: 14,
+                  padding: 14, backgroundColor: colors.card, color: colors.fg, fontWeight: "600",
+                }}
+              />
+              <Pressable
+                onPress={async () => {
+                  await blockUser(matchId);
+                  setOpenSafety(false);
+                  router.replace("/(tabs)/home");
+                }}
+                style={{ padding: 14, borderRadius: 14, backgroundColor: "#ff3b30" }}>
+                <Text style={{ color: "#fff", fontWeight: "900", textAlign: "center" }}>
+                  🚫 Bloquear y salir
+                </Text>
               </Pressable>
               <Pressable onPress={() => setOpenSafety(false)} style={{ padding: 12 }}>
-                <Text style={{ textAlign: "center", fontWeight: "900", color: colors.fg, opacity: 0.7 }}>Cancelar</Text>
+                <Text style={{ textAlign: "center", fontWeight: "700", color: colors.fg, opacity: 0.5 }}>Cancelar</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -433,25 +682,66 @@ export default function ChatScreen() {
   );
 }
 
-function Bubble({ item, colors, onWordPress }: { item: ChatMessage; colors: any; onWordPress: (w: string) => void }) {
+// ─── Bubble ──────────────────────────────────────────────────────────────────
+
+function Bubble({ item, colors, onWordPress }: {
+  item: ChatMessage; colors: any; onWordPress: (w: string) => void;
+}) {
   const mine = item.from === "me";
   const parts = useMemo(() => tokenizeWords(item.text), [item.text]);
+
   return (
-    <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "86%", marginBottom: 10 }}>
-      <View style={{ backgroundColor: mine ? colors.accent : colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 10 }}>
+    <View style={{
+      alignSelf: mine ? "flex-end" : "flex-start",
+      maxWidth: "82%", marginBottom: 12,
+    }}>
+      <View style={{
+        backgroundColor: mine ? colors.accent : colors.card,
+        borderRadius: 20,
+        borderTopRightRadius: mine ? 4 : 20,
+        borderTopLeftRadius: mine ? 20 : 4,
+        paddingHorizontal: 14, paddingVertical: 10,
+        borderWidth: 1,
+        borderColor: mine ? "transparent" : colors.border,
+        shadowColor: "#000",
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+      }}>
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-          {parts.map((p: string, idx: number) => {
+          {parts.map((p, idx) => {
             const isWord = !p.match(/^\s+$/) && !p.match(/^[,.!?;:()¿¡"""''\-]+$/);
-            if (!isWord) return <Text key={`${idx}-${p}`} style={{ color: mine ? "white" : colors.fg, fontWeight: "700", opacity: mine ? 0.95 : 0.9 }}>{p}</Text>;
+            if (!isWord) {
+              return (
+                <Text key={`${idx}-${p}`} style={{
+                  color: mine ? "rgba(255,255,255,0.9)" : colors.fg,
+                  fontWeight: "500", fontSize: 15, lineHeight: 22,
+                }}>
+                  {p}
+                </Text>
+              );
+            }
             return (
               <Pressable key={`${idx}-${p}`} onPress={() => onWordPress(p)}>
-                <Text style={{ color: mine ? "white" : colors.fg, fontWeight: "900", textDecorationLine: "underline" }}>{p}</Text>
+                <Text style={{
+                  color: mine ? "#fff" : colors.fg,
+                  fontWeight: "700", fontSize: 15, lineHeight: 22,
+                  textDecorationLine: mine ? "none" : "underline",
+                  textDecorationColor: colors.accent + "80",
+                }}>
+                  {p}
+                </Text>
               </Pressable>
             );
           })}
         </View>
       </View>
-      <Text style={{ marginTop: 4, fontSize: 11, fontWeight: "800", color: colors.fg, opacity: 0.55, alignSelf: mine ? "flex-end" : "flex-start" }}>
+      <Text style={{
+        marginTop: 4, fontSize: 11, fontWeight: "600",
+        color: colors.fg, opacity: 0.35,
+        alignSelf: mine ? "flex-end" : "flex-start",
+        paddingHorizontal: 4,
+      }}>
         {new Date(item.ts).toLocaleTimeString().slice(0, 5)}
       </Text>
     </View>

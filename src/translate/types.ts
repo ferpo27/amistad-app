@@ -16,4 +16,4 @@ export type TranslateResponse = {
   sourceLang: LanguageCode | "auto";
   tappedMeaning: string | null;
   usedWindow: number | null;
-}; 
+};
