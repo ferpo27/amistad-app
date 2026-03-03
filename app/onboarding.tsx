@@ -1,19 +1,29 @@
 // app/onboarding.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  SafeAreaView, Text, TouchableOpacity, View,
-  ScrollView, Pressable, TextInput, Platform,
+  SafeAreaView,
+  Text,
+  TouchableOpacity,
+  View,
+  ScrollView,
+  Pressable,
+  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useThemeMode } from "@/src/theme";
+import i18n from "@/src/i18n";
 import {
-  getProfile, setOnboardingDone, updateProfile,
-  type LanguageCode, type LanguageGoal, type LanguageLevel, type LearningLang,
+  getProfile,
+  setOnboardingDone,
+  updateProfile,
+  type LanguageCode,
+  type LanguageGoal,
+  type LanguageLevel,
+  type LearningLang,
 } from "@/src/storage";
 import CountryPickerModal from "@/src/components/CountryPickerModal";
 
 const LEARN_LANGS: { code: LanguageCode; label: string; flag: string }[] = [
-  { code: "es", label: "Español", flag: "🇦🇷" },
+  { code: "es", label: "Español", flag: "🇪🇸" },
   { code: "en", label: "English", flag: "🇺🇸" },
   { code: "de", label: "Deutsch", flag: "🇩🇪" },
   { code: "ja", label: "日本語", flag: "🇯🇵" },
@@ -23,38 +33,65 @@ const LEARN_LANGS: { code: LanguageCode; label: string; flag: string }[] = [
 
 const LEVELS: LanguageLevel[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 
-const INTERESTS_LIST = [
-  "Viajes", "Música", "Cine", "Arte", "Historia", "Tecnología",
-  "Gaming", "Deportes", "Gastronomía", "Fotografía", "Libros",
-  "Gym", "Trading", "Diseño", "Naturaleza", "Podcasts",
+// ✅ Intereses para mostrar en perfil público y mejorar matches
+const ALL_INTERESTS = [
+  "Música", "Deportes", "Tecnología", "Cine", "Viajes",
+  "Cocina", "Arte", "Libros", "Juegos", "Fitness",
+  "Trading", "Anime", "Fotografía", "Naturaleza", "Ciencia",
 ];
+
+function chip(label: string, active: boolean, onPress: () => void) {
+  return (
+    <TouchableOpacity
+      key={label}
+      onPress={onPress}
+      style={{
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: active ? "#000" : "#ddd",
+        backgroundColor: active ? "#000" : "#fff",
+        marginRight: 10,
+        marginBottom: 10,
+      }}
+    >
+      <Text style={{ color: active ? "#fff" : "#000", fontWeight: "800" }}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
 
 export default function Onboarding() {
   const router = useRouter();
-  const { colors } = useThemeMode();
 
-  const [country, setCountry] = useState("");
+  // ✅ País (solo elección manual por ahora)
+  const [country, setCountry] = useState(""); // "🇦🇷 Argentina"
   const [countryModal, setCountryModal] = useState(false);
-  const [displayName, setDisplayName] = useState("");
-  const [username, setUsername] = useState("");
-  const [bio, setBio] = useState("");
+
+  // Lo que ya tenías
   const [goal, setGoal] = useState<LanguageGoal>("Amistad");
   const [learn, setLearn] = useState<LearningLang[]>([]);
   const [selectedLang, setSelectedLang] = useState<LanguageCode | null>(null);
+
+  // ✅ Nuevos: intereses y bio
   const [interests, setInterests] = useState<string[]>([]);
+  const [bio, setBio] = useState("");
 
   useEffect(() => {
     (async () => {
       const p = await getProfile();
+
+      // ✅ cargar país si ya estaba guardado
       setCountry((p as any).country ?? "");
-      setDisplayName(p.displayName ?? "");
-      setUsername(p.username ?? "");
-      setBio((p as any).bio ?? "");
-      setInterests(p.interests ?? []);
+
       const saved = p.languageLearning?.learn ?? [];
       setLearn(saved);
       setGoal((p.languageLearning?.goal ?? "Amistad") as LanguageGoal);
       setSelectedLang(saved[0]?.lang ?? null);
+      setInterests(p.interests ?? []);
+      setBio((p as any).bio ?? "");
     })();
   }, []);
 
@@ -78,12 +115,6 @@ export default function Onboarding() {
     });
   };
 
-  const toggleInterest = (item: string) => {
-    setInterests((prev) =>
-      prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]
-    );
-  };
-
   const setLevelForSelected = (lvl: LanguageLevel) => {
     if (!selectedLang) return;
     setLearn((prev) =>
@@ -91,6 +122,13 @@ export default function Onboarding() {
     );
   };
 
+  const toggleInterest = (it: string) => {
+    setInterests((prev) =>
+      prev.includes(it) ? prev.filter((x) => x !== it) : [...prev, it]
+    );
+  };
+
+  // ✅ Ahora pedimos país + idiomas con nivel
   const canNext =
     country.trim().length > 0 &&
     learn.length > 0 &&
@@ -98,231 +136,172 @@ export default function Onboarding() {
 
   const finish = async () => {
     await updateProfile({
-      displayName: displayName.trim() || undefined,
-      username: username.trim() || undefined,
+      // ✅ guardar país, intereses y bio
       country: country.trim() || undefined,
-      bio: bio.trim() || undefined,
+      languageLearning: {
+        learn,
+        goal,
+      },
       interests,
-      languageLearning: { learn, goal },
+      ...(bio.trim() ? { bio: bio.trim() } : {}),
     } as any);
+
     await setOnboardingDone(true);
     router.replace("/(tabs)/home" as any);
   };
 
-  const S = {
-    label: { color: colors.fg, opacity: 0.5, fontWeight: "800" as const, fontSize: 12, letterSpacing: 1, marginBottom: 8, marginTop: 20 },
-    input: {
-      color: colors.fg, backgroundColor: colors.card,
-      borderWidth: 1, borderColor: colors.border,
-      borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13,
-      fontWeight: "700" as const, fontSize: 15,
-    },
-  };
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        <Text style={{ color: colors.fg, fontSize: 26, fontWeight: "900", marginBottom: 4 }}>
-          Tu perfil
-        </Text>
-        <Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "700", marginBottom: 8 }}>
-          Completá tus datos para conectar con personas
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff", padding: 20 }}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <Text style={{ fontSize: 22, fontWeight: "900", marginBottom: 10 }}>
+          {i18n.t("onboardingTitle")}
         </Text>
 
-        {/* Nombre */}
-        <Text style={S.label}>NOMBRE</Text>
-        <TextInput
-          value={displayName}
-          onChangeText={setDisplayName}
-          placeholder="Tu nombre"
-          placeholderTextColor={colors.fg + "44"}
-          style={S.input}
-        />
+        {/* ✅ País */}
+        <Text style={{ fontSize: 14, opacity: 0.7, marginBottom: 10 }}>
+          País
+        </Text>
 
-        {/* Username */}
-        <Text style={S.label}>USUARIO</Text>
-        <TextInput
-          value={username}
-          onChangeText={setUsername}
-          placeholder="@usuario"
-          placeholderTextColor={colors.fg + "44"}
-          autoCapitalize="none"
-          style={S.input}
-        />
-
-        {/* Bio */}
-        <Text style={S.label}>BIO</Text>
-        <TextInput
-          value={bio}
-          onChangeText={setBio}
-          placeholder="Contá algo sobre vos…"
-          placeholderTextColor={colors.fg + "44"}
-          multiline
-          numberOfLines={3}
-          style={[S.input, { minHeight: 80, textAlignVertical: "top" }]}
-        />
-
-        {/* País */}
-        <Text style={S.label}>PAÍS</Text>
         <Pressable
           onPress={() => setCountryModal(true)}
           style={{
-            ...S.input,
-            flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+            borderWidth: 1,
+            borderColor: "#eee",
+            borderRadius: 12,
+            padding: 12,
+            marginBottom: 18,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            backgroundColor: "white",
           }}
         >
-          <Text style={{ color: country ? colors.fg : colors.fg + "44", fontWeight: "700", fontSize: 15 }}>
+          <Text style={{ fontWeight: "800", color: country ? "black" : "#999" }}>
             {country || "Elegí tu país"}
           </Text>
-          <Text style={{ color: colors.fg, opacity: 0.3, fontSize: 18 }}>›</Text>
+          <Text style={{ opacity: 0.5, fontSize: 18 }}>›</Text>
         </Pressable>
+
         <CountryPickerModal
           visible={countryModal}
           onClose={() => setCountryModal(false)}
           onSelect={(label) => setCountry(label)}
         />
 
-        {/* Objetivo */}
-        <Text style={S.label}>OBJETIVO</Text>
-        <View style={{ flexDirection: "row", gap: 10 }}>
-          {(["Amistad", "Intercambio"] as LanguageGoal[]).map((g) => (
-            <Pressable
-              key={g}
-              onPress={() => setGoal(g)}
-              style={{
-                flex: 1, paddingVertical: 12, borderRadius: 14,
-                borderWidth: 1,
-                borderColor: goal === g ? colors.accent : colors.border,
-                backgroundColor: goal === g ? colors.accentSoft : colors.card,
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ color: goal === g ? colors.accent : colors.fg, fontWeight: "900" }}>
-                {g === "Amistad" ? "Hacer amigos" : "Intercambio"}
-              </Text>
-            </Pressable>
-          ))}
+        {/* Goal */}
+        <Text style={{ fontSize: 14, opacity: 0.7, marginBottom: 10 }}>
+          {i18n.t("goalTitle")}
+        </Text>
+
+        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+          {chip(i18n.t("goalFriend"), goal === "Amistad", () => setGoal("Amistad"))}
+          {chip(
+            i18n.t("goalExchange"),
+            goal === "Intercambio",
+            () => setGoal("Intercambio")
+          )}
         </View>
 
-        {/* Idiomas */}
-        <Text style={S.label}>IDIOMAS QUE APRENDÉS</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <View style={{ height: 14 }} />
+
+        {/* Learn languages */}
+        <Text style={{ fontSize: 14, opacity: 0.7, marginBottom: 10 }}>
+          {i18n.t("pickLearnLangs")}
+        </Text>
+
+        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
           {LEARN_LANGS.map((l) => {
             const active = learn.some((x) => x.lang === l.code);
-            return (
-              <Pressable
-                key={l.code}
-                onPress={() => toggleLang(l.code)}
-                style={{
-                  paddingVertical: 10, paddingHorizontal: 14, borderRadius: 99,
-                  borderWidth: 1,
-                  borderColor: active ? colors.accent : colors.border,
-                  backgroundColor: active ? colors.accentSoft : colors.card,
-                }}
-              >
-                <Text style={{ color: active ? colors.accent : colors.fg, fontWeight: "900" }}>
-                  {l.flag} {l.label}
-                </Text>
-              </Pressable>
-            );
+            return chip(`${l.flag} ${l.label}`, active, () => toggleLang(l.code));
           })}
         </View>
 
-        {/* Idiomas seleccionados para asignar nivel */}
-        {learn.length > 0 && (
-          <>
-            <Text style={S.label}>ELEGÍ EL NIVEL</Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-              {learn.map((x) => {
-                const meta = LEARN_LANGS.find((l) => l.code === x.lang);
-                const active = selectedLang === x.lang;
-                return (
-                  <Pressable
-                    key={x.lang}
-                    onPress={() => setSelectedLang(x.lang)}
-                    style={{
-                      paddingVertical: 8, paddingHorizontal: 12, borderRadius: 99,
-                      borderWidth: 1,
-                      borderColor: active ? colors.accent : colors.border,
-                      backgroundColor: active ? colors.accentSoft : colors.card,
-                    }}
-                  >
-                    <Text style={{ color: active ? colors.accent : colors.fg, fontWeight: "900" }}>
-                      {meta?.flag} {meta?.label} ({x.level ?? "—"})
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {LEVELS.map((lvl) => (
-                <Pressable
-                  key={lvl}
-                  onPress={() => setLevelForSelected(lvl)}
-                  style={{
-                    paddingVertical: 9, paddingHorizontal: 18, borderRadius: 99,
-                    borderWidth: 1,
-                    borderColor: selected?.level === lvl ? colors.accent : colors.border,
-                    backgroundColor: selected?.level === lvl ? colors.accentSoft : colors.card,
-                  }}
-                >
-                  <Text style={{ color: selected?.level === lvl ? colors.accent : colors.fg, fontWeight: "900" }}>
-                    {lvl}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </>
-        )}
+        <View style={{ height: 14 }} />
 
-        {/* Intereses */}
-        <Text style={S.label}>INTERESES</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {INTERESTS_LIST.map((item) => {
-            const active = interests.includes(item);
-            return (
-              <Pressable
-                key={item}
-                onPress={() => toggleInterest(item)}
-                style={{
-                  paddingVertical: 9, paddingHorizontal: 14, borderRadius: 99,
-                  borderWidth: 1,
-                  borderColor: active ? colors.accent : colors.border,
-                  backgroundColor: active ? colors.accentSoft : colors.card,
-                }}
-              >
-                <Text style={{ color: active ? colors.accent : colors.fg, fontWeight: "900", fontSize: 14 }}>
-                  {item}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <Text style={{ color: colors.fg, opacity: 0.4, fontSize: 12, marginTop: 16 }}>
-          * Necesitás elegir país + al menos 1 idioma con nivel para continuar.
+        {/* Level */}
+        <Text style={{ fontSize: 14, opacity: 0.7, marginBottom: 10 }}>
+          {i18n.t("pickLevel")}
         </Text>
-      </ScrollView>
 
-      {/* CTA fijo abajo */}
-      <View style={{
-        position: "absolute", bottom: 0, left: 0, right: 0,
-        padding: 20, paddingBottom: Platform.OS === "ios" ? 34 : 20,
-        backgroundColor: colors.bg, borderTopWidth: 1, borderTopColor: colors.border,
-      }}>
-        <Pressable
+        {/* Selector de idioma seleccionado para asignarle nivel */}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 8 }}>
+          {learn.map((x) => {
+            const meta = LEARN_LANGS.find((l) => l.code === x.lang);
+            const active = selectedLang === x.lang;
+            return chip(
+              `${meta?.flag ?? ""} ${meta?.label ?? x.lang} (${x.level ?? "—"})`,
+              active,
+              () => setSelectedLang(x.lang)
+            );
+          })}
+        </View>
+
+        {/* Niveles para ese idioma */}
+        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+          {LEVELS.map((lvl) =>
+            chip(lvl, selected?.level === lvl, () => setLevelForSelected(lvl))
+          )}
+        </View>
+
+        <View style={{ height: 20 }} />
+
+        {/* ✅ Intereses */}
+        <Text style={{ fontSize: 14, opacity: 0.7, marginBottom: 10 }}>
+          Intereses (opcional)
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+          {ALL_INTERESTS.map((it) => chip(it, interests.includes(it), () => toggleInterest(it)))}
+        </View>
+
+        <View style={{ height: 14 }} />
+
+        {/* ✅ Bio */}
+        <Text style={{ fontSize: 14, opacity: 0.7, marginBottom: 10 }}>
+          Bio (opcional, máx 200 caracteres)
+        </Text>
+        <TextInput
+          value={bio}
+          onChangeText={(v) => setBio(v.slice(0, 200))}
+          placeholder="Contá algo sobre vos…"
+          multiline
+          style={{
+            borderWidth: 1,
+            borderColor: "#eee",
+            borderRadius: 12,
+            padding: 12,
+            minHeight: 80,
+            textAlignVertical: "top",
+            fontWeight: "700",
+            fontSize: 14,
+            marginBottom: 4,
+          }}
+        />
+        <Text style={{ fontSize: 11, opacity: 0.5, textAlign: "right" }}>
+          {bio.length}/200
+        </Text>
+
+        <View style={{ height: 20 }} />
+
+        <TouchableOpacity
           onPress={finish}
           disabled={!canNext}
           style={{
-            backgroundColor: canNext ? colors.accent : colors.border,
-            paddingVertical: 16, borderRadius: 16, alignItems: "center",
+            backgroundColor: canNext ? "#000" : "#ddd",
+            padding: 14,
+            borderRadius: 12,
           }}
         >
-          <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>
-            Guardar y continuar
+          <Text style={{ color: "#fff", textAlign: "center", fontWeight: "900" }}>
+            {i18n.t("next")}
           </Text>
-        </Pressable>
-      </View>
+        </TouchableOpacity>
+
+        <Text style={{ marginTop: 10, fontSize: 12, opacity: 0.6 }}>
+          * Para continuar: elegí país + al menos 1 idioma y asignale nivel a cada uno.
+        </Text>
+
+        <View style={{ height: 30 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }

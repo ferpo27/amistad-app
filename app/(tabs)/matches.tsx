@@ -1,10 +1,11 @@
 // app/(tabs)/matches.tsx
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { View, Text, ScrollView, Pressable, Platform } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useThemeMode } from "../../src/theme";
 import { PROFILES } from "../../src/mock/profiles";
 import { calculateCompatibility } from "../../src/matching/calculateCompatibility";
+import { getProfile } from "../../src/storage";
 
 type AnyProfile = any;
 type RowProfile = {
@@ -62,11 +63,24 @@ export default function MatchesScreen() {
   const router = useRouter();
   const { colors } = useThemeMode();
   const [tab, setTab] = useState<"compatibles" | "contactos">("compatibles");
+  const [myProfile, setMyProfile] = useState<any>(null);
 
-  const me = useMemo(() => ({
-    interests: ["Fitness", "Trading", "Tech", "Music", "Travel", "Movies"],
-    goalLanguage: "EN",
-  }), []);
+  // Carga perfil real al enfocar la pantalla
+  useFocusEffect(useCallback(() => {
+    getProfile().then(setMyProfile);
+  }, []));
+
+  const me = useMemo(() => {
+    if (myProfile) {
+      return {
+        interests: myProfile.interests ?? [],
+        nativeLang: myProfile.nativeLang,
+        learning: (myProfile.languageLearning?.learn ?? []).map((x: any) => x.lang),
+        goalLanguage: "EN",
+      };
+    }
+    return { interests: ["Fitness", "Trading", "Tech", "Music", "Travel", "Movies"], goalLanguage: "EN" };
+  }, [myProfile]);
 
   const ranked = useMemo(() => {
     return (PROFILES as AnyProfile[])
@@ -81,18 +95,18 @@ export default function MatchesScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      {/* Header */}
       <View style={{
         paddingTop: Platform.OS === "ios" ? 54 : 22,
-        paddingHorizontal: 20,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
+        paddingHorizontal: 20, paddingBottom: 16,
+        borderBottomWidth: 1, borderBottomColor: colors.border,
       }}>
         <Text style={{ color: colors.fg, fontSize: 28, fontWeight: "900" }}>Personas</Text>
         <Text style={{ color: colors.fg, opacity: 0.5, marginTop: 2, fontWeight: "700" }}>
           {ranked.length} perfiles disponibles
         </Text>
 
+        {/* Tab selector — tu diseño exacto */}
         <View style={{
           flexDirection: "row", marginTop: 14,
           backgroundColor: colors.card, borderRadius: 12,
@@ -118,6 +132,7 @@ export default function MatchesScreen() {
         </View>
       </View>
 
+      {/* ── TAB COMPATIBLES ────────────────────────────────────────────────── */}
       {tab === "compatibles" ? (
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
           {ranked.map((p, i) => {
@@ -126,7 +141,7 @@ export default function MatchesScreen() {
             return (
               <Pressable
                 key={p.id}
-                onPress={() => router.push(`/(tabs)/chat/${p.id}` as any)}
+                onPress={() => router.push(`/(tabs)/profile/${p.id}` as any)}
                 style={{
                   flexDirection: "row", alignItems: "center",
                   paddingHorizontal: 20, paddingVertical: 14,
@@ -134,6 +149,7 @@ export default function MatchesScreen() {
                   backgroundColor: i === 0 ? colors.accentSoft : "transparent",
                 }}
               >
+                {/* Avatar con flag */}
                 <View style={{
                   width: 50, height: 50, borderRadius: 25,
                   backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
@@ -141,6 +157,8 @@ export default function MatchesScreen() {
                 }}>
                   <Text style={{ fontSize: 22 }}>{FLAGS[nativeLang] ?? "🌐"}</Text>
                 </View>
+
+                {/* Info */}
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 16 }}>{p.name}</Text>
@@ -159,7 +177,9 @@ export default function MatchesScreen() {
                     </Text>
                   )}
                 </View>
-                <View style={{ alignItems: "flex-end", marginLeft: 10 }}>
+
+                {/* Score + chevron */}
+                <View style={{ alignItems: "flex-end", marginLeft: 10, gap: 4 }}>
                   <Text style={{ color: scorePct >= 40 ? colors.accent : colors.fg, fontWeight: "900", fontSize: 18 }}>
                     {scorePct}%
                   </Text>
@@ -169,22 +189,27 @@ export default function MatchesScreen() {
             );
           })}
         </ScrollView>
+
       ) : (
+        /* ── TAB CONTACTOS — lista alfabética ────────────────────────────── */
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
           {alphabetical.map(({ letter, items }) => (
             <View key={letter}>
+              {/* Separador de letra */}
               <View style={{
                 paddingHorizontal: 20, paddingVertical: 6,
-                backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border,
+                backgroundColor: colors.card,
+                borderBottomWidth: 1, borderBottomColor: colors.border,
               }}>
                 <Text style={{ color: colors.accent, fontWeight: "900", fontSize: 13 }}>{letter}</Text>
               </View>
+
               {items.map((p) => {
                 const nativeLang = (p.nativeLang ?? p.native ?? "").toLowerCase();
                 return (
                   <Pressable
                     key={p.id}
-                    onPress={() => router.push(`/(tabs)/chat/${p.id}` as any)}
+                    onPress={() => router.push(`/(tabs)/profile/${p.id}` as any)}
                     style={{
                       flexDirection: "row", alignItems: "center",
                       paddingHorizontal: 20, paddingVertical: 14,

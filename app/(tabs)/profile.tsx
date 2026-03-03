@@ -115,14 +115,8 @@ export default function MyProfileScreen() {
     }
 
     const uri = asset.uri;
-
-    // ✅ Actualiza UI inmediato
     setPhotoUri(uri);
-
-    // ✅ Persiste
     await updateProfile({ photoUri: uri } as any);
-
-    // ✅ Vuelve a cargar para asegurar que quedó guardado
     await load();
   };
 
@@ -426,7 +420,7 @@ export default function MyProfileScreen() {
           )}
         </View>
 
-        {/* INTERESES (simple) */}
+        {/* INTERESES */}
         <View>
           <Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "800", fontSize: 12, letterSpacing: 1, marginBottom: 10 }}>
             INTERESES

@@ -10,55 +10,66 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
+        headerShown: true,
         tabBarShowLabel: false,
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
-          height: 60,
-          paddingBottom: 8,
         },
         tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.fg + "55",
+        tabBarInactiveTintColor: colors.fg + "88",
+        headerStyle: { backgroundColor: colors.card },
+        headerTintColor: colors.fg,
       }}
     >
       <Tabs.Screen
         name="home"
         options={{
+          title: "Home",
           tabBarIcon: ({ color, size }) => <Ionicons name="home" color={color} size={size} />,
         }}
       />
+
       <Tabs.Screen
         name="chats"
         options={{
+          title: "Chats",
           tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" color={color} size={size} />,
         }}
       />
+
       <Tabs.Screen
         name="matches"
         options={{
+          title: "Matches",
           tabBarIcon: ({ color, size }) => <Ionicons name="people" color={color} size={size} />,
         }}
       />
+
       <Tabs.Screen
         name="profile"
         options={{
+          title: "Perfil",
           tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} />,
         }}
       />
+
       <Tabs.Screen
         name="settings"
         options={{
+          title: "Ajustes",
           tabBarIcon: ({ color, size }) => <Ionicons name="settings" color={color} size={size} />,
         }}
       />
+
+      {/* Pantallas navegables pero sin tab visible */}
       <Tabs.Screen
         name="chat/[id]"
-        options={{ href: null }}
+        options={{ href: null, title: "Chat" }}
       />
       <Tabs.Screen
         name="profile/[id]"
-        options={{ href: null }}
+        options={{ href: null, title: "Perfil" }}
       />
     </Tabs>
   );
