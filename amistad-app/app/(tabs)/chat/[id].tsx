@@ -110,6 +110,7 @@ function dictLookup(word: string, source: LanguageCode, target: LanguageCode): s
   return table[cleaned] ?? null;
 }
 
+// Icebreakers en idioma NATIVO del match — de tu versión anterior
 function starterTemplates(nativeLang: LanguageCode, name: string, country: string): string[] {
   switch (nativeLang) {
     case "de": return [
@@ -168,6 +169,7 @@ export default function ChatScreen() {
   const [showStarters,   setShowStarters]   = useState(true);
   const [uiLang,         setUiLang]         = useState<LanguageCode>("es");
 
+  // Translator
   const [openWord,        setOpenWord]        = useState(false);
   const [activeSentence,  setActiveSentence]  = useState<string>("");
   const [activeSourceLang,setActiveSourceLang]= useState<LanguageCode>("en");
@@ -184,19 +186,23 @@ export default function ChatScreen() {
 
   const botLang: LanguageCode = ((match?.nativeLang ?? "en") as LanguageCode);
 
+  // Starters — combina connectionEngine + icebreakers en idioma nativo + cultural tip
   const starters = useMemo(() => {
     const name    = match?.name    ?? "friend";
     const country = match?.country ?? "";
     const lang    = botLang;
 
+    // 1. Starters de connectionEngine (si meProfile está cargado)
     let engineTexts: string[] = [];
     if (meProfile && match) {
       try { engineTexts = generateConversationStarters(meProfile, match); } catch { /* ok */ }
     }
 
+    // 2. Plantillas en idioma nativo
     const [a, b, c] = starterTemplates(lang, name, country);
     const nativeTexts = [a, b, c];
 
+    // 3. Cultural tip
     const tip = typeof getCulturalTip === "function" ? getCulturalTip(country) : null;
     const tipMap: Record<string, string> = {
       de: `Ich habe über ${country} gelesen: "${tip}". Stimmt das?`,
@@ -212,6 +218,7 @@ export default function ChatScreen() {
       ...nativeTexts,
       ...engineTexts,
     ];
+    // deduplicar y limitar
     const seen = new Set<string>();
     const deduped: string[] = [];
     for (const t of all) {
@@ -221,6 +228,7 @@ export default function ChatScreen() {
     return deduped.map((t, i) => ({ id: String(i), text: t }));
   }, [match, meProfile, botLang]);
 
+  // Carga perfil + historial + health check
   useEffect(() => {
     (async () => {
       const my = await getProfile();
@@ -249,12 +257,15 @@ export default function ChatScreen() {
     })();
   }, [matchId]);
 
+  // Recarga idioma al volver al tab
   useFocusEffect(useCallback(() => {
     (async () => {
       const l = (await getAppLanguage()) ?? "es";
       setUiLang(normalizeUiLang(l));
     })();
   }, []));
+
+  // ─── Send ──────────────────────────────────────────────────────────────────
 
   async function addMessage(from: "me" | "them", messageText: string) {
     const value = messageText.trim();
@@ -297,6 +308,8 @@ export default function ChatScreen() {
       }
     }, delay);
   }
+
+  // ─── Translator ────────────────────────────────────────────────────────────
 
   function getSourceLangForMessage(from: "me" | "them"): LanguageCode {
     return from === "them" ? botLang : uiLang;
@@ -403,11 +416,13 @@ export default function ChatScreen() {
     }
   }
 
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* ── HEADER ── */}
+      {/* ── HEADER ────────────────────────────────────────────────────────── */}
       <View style={{
         paddingTop: Platform.OS === "ios" ? 54 : 22,
         paddingHorizontal: 16, paddingBottom: 12,
@@ -428,7 +443,9 @@ export default function ChatScreen() {
               {match?.country ? ` • ${match.country}` : ""}
             </Text>
             <Text style={{ color: colors.fg, opacity: 0.7, fontWeight: "700" }} numberOfLines={1}>
-              {botTyping ? "escribiendo…" : `Tap para traducir • ${String(botLang).toUpperCase()}`}
+              {botTyping
+                ? "escribiendo…"
+                : `Tap para traducir • ${String(botLang).toUpperCase()}`}
             </Text>
             {translatorOk === false && (
               <Text style={{ color: "#ff6b6b", opacity: 0.9, marginTop: 2, fontWeight: "800" }}>
@@ -437,6 +454,7 @@ export default function ChatScreen() {
             )}
           </View>
 
+          {/* Botón Ice — abre/cierra starters */}
           <Pressable
             onPress={() => setShowStarters((v) => !v)}
             style={{
@@ -451,6 +469,7 @@ export default function ChatScreen() {
             </Text>
           </Pressable>
 
+          {/* Seguridad */}
           <Pressable onPress={() => setOpenSafety(true)} style={{
             paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14,
             borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card,
@@ -459,7 +478,7 @@ export default function ChatScreen() {
           </Pressable>
         </View>
 
-        {/* ── STARTERS ── */}
+        {/* ── STARTERS ──────────────────────────────────────────────────── */}
         {showStarters && starters.length > 0 && (
           <View style={{
             marginTop: 10, borderWidth: 1, borderColor: colors.border,
@@ -493,7 +512,7 @@ export default function ChatScreen() {
         )}
       </View>
 
-      {/* ── CHAT ── */}
+      {/* ── CHAT ──────────────────────────────────────────────────────────── */}
       <KeyboardAvoidingView style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
@@ -524,11 +543,12 @@ export default function ChatScreen() {
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         />
 
-        {/* ── INPUT ── */}
+        {/* ── INPUT ─────────────────────────────────────────────────────── */}
         <View style={{
           padding: 12, borderTopWidth: 1, borderTopColor: colors.border,
           backgroundColor: colors.bg, flexDirection: "row", gap: 10, alignItems: "flex-end",
         }}>
+          {/* Botón 🔤 abre translator con último mensaje del bot */}
           <Pressable
             onPress={() => {
               const last = [...msgs].reverse().find((m) => m.from === "them");
@@ -569,7 +589,7 @@ export default function ChatScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* ── TRANSLATOR MODAL ── */}
+      {/* ── TRANSLATOR MODAL ──────────────────────────────────────────────── */}
       <Modal visible={openWord} transparent animationType="fade">
         <Pressable onPress={() => setOpenWord(false)}
           style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }}>
@@ -686,7 +706,7 @@ export default function ChatScreen() {
         </Pressable>
       </Modal>
 
-      {/* ── SAFETY MODAL ── */}
+      {/* ── SAFETY MODAL ──────────────────────────────────────────────────── */}
       <Modal visible={openSafety} transparent animationType="fade">
         <Pressable onPress={() => setOpenSafety(false)}
           style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }}>
