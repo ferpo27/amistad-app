@@ -10,6 +10,14 @@ export type TranslateRequest = {
   window?: number | null;
 };
 
+
+export type TranslateWordInContextRequest = {
+  fullText: string;
+  tappedTokenIndex: number;
+  sourceLang: import("../storage").LanguageCode;
+  targetLang: import("../storage").LanguageCode;
+};
+
 export type TranslateResponse = {
   translatedText: string;
   targetLang: LanguageCode;

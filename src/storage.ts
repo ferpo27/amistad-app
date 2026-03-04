@@ -202,6 +202,12 @@ export async function getProfile(): Promise<ProfileData> {
 
   return {
     displayName: typeof parsed.displayName === "string" ? parsed.displayName : undefined,
+    username:    typeof parsed.username    === "string" ? parsed.username    : undefined,
+    country:     typeof parsed.country     === "string" ? parsed.country     : undefined,
+    city:        typeof parsed.city        === "string" ? parsed.city        : undefined,
+    nativeLang:  isLanguageCode(parsed.nativeLang)      ? parsed.nativeLang  : undefined,
+    bio:         typeof parsed.bio         === "string" ? parsed.bio         : undefined,
+    photoUri:    typeof parsed.photoUri    === "string" ? parsed.photoUri    : undefined,
     contact: parsed.contact ?? undefined,
     dob: parsed.dob ?? undefined,
     favorites,

@@ -1,58 +1,57 @@
 // src/translate/translatorApi.ts
+// Traductor con 3 niveles de fallback:
+// 1. Tu API Railway  2. MyMemory (gratis)  3. Diccionario local
 import type { LanguageCode } from "../storage";
-import { Platform } from "react-native";
 
-export type TranslateResponse = { translated: string };
+const RAILWAY_BASE = process.env.EXPO_PUBLIC_TRANSLATOR_API_BASE ?? "";
 
-// ✅ Cambiá esto según tu caso:
-// - Android emulator: 10.0.2.2
-// - iOS simulator: http://localhost
-// - Celular físico: IP de tu PC en la red (ej: http://192.168.0.15)
-function getBaseUrl() {
-  // Android emulator
-  if (Platform.OS === "android") return "http://10.0.2.2:8787";
-
-  // iOS simulator suele andar con localhost
-  return "http://localhost:8787";
-}
-
-function withTimeout<T>(p: Promise<T>, ms = 6000): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error("timeout")), ms);
-    p.then((v) => {
-      clearTimeout(t);
-      resolve(v);
-    }).catch((e) => {
-      clearTimeout(t);
-      reject(e);
-    });
-  });
-}
-
-export async function apiTranslateText(params: {
-  text: string;
-  from: LanguageCode;
-  to: LanguageCode;
-  baseUrl?: string;
-}): Promise<string> {
-  const { text, from, to, baseUrl } = params;
-  const url = `${baseUrl ?? getBaseUrl()}/translate`;
-
-  const res = await withTimeout(
-    fetch(url, {
+async function translateWithRailway(text: string, from: LanguageCode, to: LanguageCode): Promise<string | null> {
+  if (!RAILWAY_BASE) return null;
+  try {
+    const res = await fetch(`${RAILWAY_BASE}/translate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // ✅ BACKEND pide from_lang y to_lang
       body: JSON.stringify({ text, from_lang: from, to_lang: to }),
-    }),
-    6000
-  );
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data?.translated as string) || null;
+  } catch { return null; }
+}
 
-  if (!res.ok) {
-    const msg = await res.text().catch(() => "");
-    throw new Error(`api ${res.status} ${msg}`);
-  }
+async function translateWithMyMemory(text: string, from: LanguageCode, to: LanguageCode): Promise<string | null> {
+  try {
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const translated = data?.responseData?.translatedText as string;
+    if (!translated || translated === text) return null;
+    return translated;
+  } catch { return null; }
+}
 
-  const data = (await res.json()) as TranslateResponse;
-  return typeof data?.translated === "string" ? data.translated : text;
+const DICT: Record<string, Record<string, string>> = {
+  "de->es": { hallo: "hola", danke: "gracias", bitte: "por favor", ich: "yo", ja: "sí", nein: "no" },
+  "de->en": { hallo: "hello", danke: "thanks", bitte: "please", ich: "I", ja: "yes", nein: "no" },
+  "ru->es": { "привет": "hola", "как": "cómo", "дела": "estás", "да": "sí", "нет": "no" },
+  "ru->en": { "привет": "hi", "как": "how", "дела": "are things", "да": "yes", "нет": "no" },
+  "ja->es": { "こんにちは": "hola", "ありがとう": "gracias", "はい": "sí", "いいえ": "no" },
+  "ja->en": { "こんにちは": "hello", "ありがとう": "thank you", "はい": "yes", "いいえ": "no" },
+  "zh->es": { "你好": "hola", "谢谢": "gracias", "是": "sí", "不": "no" },
+  "zh->en": { "你好": "hello", "谢谢": "thank you", "是": "yes", "不": "no" },
+};
+
+function translateLocal(text: string, from: LanguageCode, to: LanguageCode): string {
+  const dict = DICT[`${from}->${to}`] ?? {};
+  return text.trim().split(" ").map((p) => dict[p.toLowerCase()] ?? p).join(" ");
+}
+
+export async function translateText(text: string, from: LanguageCode, to: LanguageCode): Promise<string> {
+  if (from === to) return text;
+  const railway = await translateWithRailway(text, from, to);
+  if (railway) return railway;
+  const myMemory = await translateWithMyMemory(text, from, to);
+  if (myMemory) return myMemory;
+  return translateLocal(text, from, to);
 }

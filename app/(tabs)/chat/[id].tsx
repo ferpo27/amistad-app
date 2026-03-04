@@ -21,11 +21,32 @@ type WordToken = { token: string; index: number };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+// CJK tokenizer — cada kanji/hanzi es su propia palabra para traducir
+const RE_CJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/u;
+
+function splitCJK(text: string): string[] {
+  const out: string[] = [];
+  for (const ch of text) {
+    if (RE_CJK.test(ch)) out.push(ch);       // cada kanji = 1 token
+    else if (/[。！？!?…、,\s]/.test(ch)) out.push(ch);
+    else {
+      // letras latinas juntas (nombres propios dentro del texto)
+      if (out.length && !RE_CJK.test(out[out.length - 1]) && !/[。！？!?…、,\s]/.test(out[out.length - 1])) {
+        out[out.length - 1] += ch;
+      } else {
+        out.push(ch);
+      }
+    }
+  }
+  return out.filter(Boolean);
+}
+
 function tokenizeWords(text: string): string[] {
-  return text.split(/(\s+|[,.!?;:()¿¡"""''\-])/g).filter((t) => t !== "" && t !== undefined);
+  if (RE_CJK.test(text)) return splitCJK(text);
+  return text.split(/(\s+|[,.!?;:()¿¡"""\'\'-])/g).filter((t) => t !== "" && t !== undefined);
 }
 function isOnlyPunctOrSpace(t: string): boolean {
-  return !!t.match(/^\s+$/) || !!t.match(/^[,.!?;:()¿¡"""''\-]+$/);
+  return !!t.match(/^\s+$/) || !!t.match(/^[,.!?;:()¿¡"""\'\'\-。！？…、]+$/);
 }
 function normalizeUiLang(lang: string | undefined | null): LanguageCode {
   const two = (lang ?? "es").toLowerCase().slice(0, 2);
@@ -117,39 +138,110 @@ export default function ChatScreen() {
 
   const botLang: LanguageCode = (match?.nativeLang ?? "en") as LanguageCode;
 
+  // Icebreakers contextuales: cambian según el historial de conversación
   const starters = useMemo<StarterItem[]>(() => {
     const name = match?.name ?? "friend";
     const country = match?.country ?? "";
     const lang = botLang;
-
-    const templates = starterTemplatesNative(lang, name, country);
-    const tip = getCulturalTip(country);
-
     const all: StarterItem[] = [];
 
-    if (tip) {
-      const tipNative: Record<string, string> = {
-        de: `Ich habe gelesen: "${tip}". Stimmt das?`,
-        ru: `Я читал(а): "${tip}". Это правда?`,
-        ja: `「${tip}」って本当？`,
-        zh: `"${tip}"，对吗？`,
-        en: `I read: "${tip}". Is that true?`,
-        es: `Leí: "${tip}". ¿Es así?`,
+    // ── Sin mensajes: saludo inicial ────────────────────────────────────────
+    if (msgs.length === 0) {
+      const greetings: Record<LanguageCode, { native: string; es: string }[]> = {
+        de: [
+          { native: `Hallo ${name}! Wie geht's dir heute? 😊`, es: `¡Hola ${name}! ¿Cómo estás hoy?` },
+          { native: `Hi ${name}! Ich lerne gerade Deutsch — kannst du mir helfen?`, es: `¡Hola! Estoy aprendiendo alemán, ¿me ayudás?` },
+          { native: `Hey ${name}! Was machst du so gerne in ${country}?`, es: `¿Qué te gusta hacer en ${country}?` },
+        ],
+        ru: [
+          { native: `Привет, ${name}! Как дела? 😊`, es: `¡Hola ${name}! ¿Cómo estás?` },
+          { native: `Привет! Я изучаю русский — поможешь мне?`, es: `¡Hola! Estoy aprendiendo ruso, ¿me ayudás?` },
+          { native: `Привет, ${name}! Что любишь делать в ${country}?`, es: `¿Qué te gusta hacer en ${country}?` },
+        ],
+        ja: [
+          { native: `こんにちは、${name}！今日はどうですか？😊`, es: `¡Hola ${name}! ¿Cómo estás hoy?` },
+          { native: `はじめまして！日本語を勉強しています。助けてもらえますか？`, es: `¡Mucho gusto! Estoy estudiando japonés, ¿me ayudás?` },
+          { native: `${country}で好きなことは何ですか？`, es: `¿Qué te gusta hacer en ${country}?` },
+        ],
+        zh: [
+          { native: `你好，${name}！你今天怎么样？😊`, es: `¡Hola ${name}! ¿Cómo estás hoy?` },
+          { native: `你好！我在学中文，你能帮我吗？`, es: `¡Hola! Estoy aprendiendo chino, ¿me ayudás?` },
+          { native: `你在${country}最喜欢做什么？`, es: `¿Qué te gusta hacer en ${country}?` },
+        ],
+        en: [
+          { native: `Hey ${name}! How's it going? 😊`, es: `¡Hola ${name}! ¿Cómo andás?` },
+          { native: `Hi! I'm learning English — can you help me practice?`, es: `¡Hola! Estoy aprendiendo inglés, ¿practicamos?` },
+          { native: `What do you enjoy doing in ${country}?`, es: `¿Qué te gusta hacer en ${country}?` },
+        ],
+        es: [
+          { native: `¡Hola ${name}! ¿Cómo andás? 😊`, es: `¡Hola ${name}! ¿Cómo estás?` },
+          { native: `¡Hola! Estoy aprendiendo español, ¿me ayudás?`, es: `¡Hola! Estoy aprendiendo español.` },
+          { native: `¿Qué te gusta hacer en ${country}?`, es: `¿Qué te gusta hacer en ${country}?` },
+        ],
       };
-      all.push({
-        id: "tip",
-        textNative: tipNative[lang] ?? tipNative.es,
-        textEs: `Dato cultural sobre ${country}: "${tip}"`,
-      });
+      const opts = greetings[lang] ?? greetings.en;
+      opts.forEach((t, i) => all.push({ id: `greet${i}`, textNative: t.native, textEs: t.es }));
     }
 
-    templates.forEach((t, i) => all.push({ id: `t${i}`, textNative: t.native, textEs: t.es }));
+    // ── Con mensajes: sugerir respuestas basadas en el último mensaje del bot ─
+    else {
+      const lastBotMsg = [...msgs].reverse().find((m) => m.from === "them");
+      const lastUserMsg = [...msgs].reverse().find((m) => m.from === "me");
+      const lastText = lastBotMsg?.text ?? "";
+      const myInterests = meProfile?.interests ?? [];
+      const common = (match?.interests ?? []).filter((i) => myInterests.includes(i));
 
-    if (meProfile && match) {
-      try {
-        const engine = generateConversationStarters(meProfile, match);
-        engine.forEach((e, i) => all.push({ id: `e${i}`, textNative: e, textEs: e }));
-      } catch {}
+      // Respuestas de continuación según idioma
+      const continuations: Record<LanguageCode, { native: string; es: string }[]> = {
+        de: [
+          { native: `Das ist sehr interessant! Erzähl mir mehr.`, es: `¡Qué interesante! Contame más.` },
+          { native: `Wirklich? Das wusste ich nicht!`, es: `¿En serio? ¡No lo sabía!` },
+          { native: `Wie lange wohnst du schon in ${country}?`, es: `¿Hace cuánto vivís en ${country}?` },
+        ],
+        ru: [
+          { native: `Это очень интересно! Расскажи подробнее.`, es: `¡Qué interesante! Contame más.` },
+          { native: `Правда? Я не знал(а)!`, es: `¿En serio? ¡No lo sabía!` },
+          { native: `Как давно ты живёшь в ${country}?`, es: `¿Hace cuánto vivís en ${country}?` },
+        ],
+        ja: [
+          { native: `それはとても面白いですね！もっと教えてください。`, es: `¡Qué interesante! Contame más.` },
+          { native: `本当ですか？知りませんでした！`, es: `¿En serio? ¡No lo sabía!` },
+          { native: `${country}にはどのくらい住んでいますか？`, es: `¿Hace cuánto vivís en ${country}?` },
+        ],
+        zh: [
+          { native: `这真的很有趣！请告诉我更多。`, es: `¡Qué interesante! Contame más.` },
+          { native: `真的吗？我不知道！`, es: `¿En serio? ¡No lo sabía!` },
+          { native: `你在${country}住了多久了？`, es: `¿Hace cuánto vivís en ${country}?` },
+        ],
+        en: [
+          { native: `That's really interesting! Tell me more.`, es: `¡Qué interesante! Contame más.` },
+          { native: `Really? I didn't know that!`, es: `¿En serio? ¡No lo sabía!` },
+          { native: `How long have you been in ${country}?`, es: `¿Hace cuánto vivís en ${country}?` },
+        ],
+        es: [
+          { native: `¡Qué interesante! Contame más.`, es: `¡Qué interesante! Contame más.` },
+          { native: `¿En serio? ¡No lo sabía!`, es: `¿En serio? ¡No lo sabía!` },
+          { native: `¿Hace cuánto vivís en ${country}?`, es: `¿Hace cuánto vivís en ${country}?` },
+        ],
+      };
+
+      const opts = continuations[lang] ?? continuations.en;
+      opts.forEach((t, i) => all.push({ id: `cont${i}`, textNative: t.native, textEs: t.es }));
+
+      // Si tienen intereses en común, sugerir uno
+      if (common.length > 0) {
+        const interest = common[0];
+        const interestSuggestions: Record<LanguageCode, { native: string; es: string }> = {
+          de: { native: `Ich mag auch ${interest}! Was ist dein Lieblingsaspekt davon?`, es: `¡A mí también me gusta ${interest}! ¿Qué es lo que más te gusta?` },
+          ru: { native: `Мне тоже нравится ${interest}! Что тебе в этом больше всего нравится?`, es: `¡A mí también me gusta ${interest}!` },
+          ja: { native: `私も${interest}が好きです！一番好きなところは？`, es: `¡A mí también me gusta ${interest}!` },
+          zh: { native: `我也喜欢${interest}！你最喜欢哪方面？`, es: `¡A mí también me gusta ${interest}!` },
+          en: { native: `I also love ${interest}! What do you enjoy most about it?`, es: `¡A mí también me gusta ${interest}!` },
+          es: { native: `¡A mí también me gusta ${interest}! ¿Qué es lo que más disfrutás?`, es: `¡A mí también me gusta ${interest}!` },
+        };
+        const s = interestSuggestions[lang];
+        if (s) all.push({ id: "common", textNative: s.native, textEs: s.es });
+      }
     }
 
     const seen = new Set<string>();
@@ -158,7 +250,7 @@ export default function ChatScreen() {
       seen.add(s.textNative);
       return true;
     }).slice(0, 5);
-  }, [match, meProfile, botLang]);
+  }, [match, meProfile, botLang, msgs]);
 
   useEffect(() => {
     (async () => {

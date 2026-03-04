@@ -25,21 +25,32 @@ function fallbackReply(nativeLang: string): string {
   }
 }
 
+const LANG_NAMES: Record<string, string> = {
+  es: "Spanish", en: "English", de: "German", ja: "Japanese", ru: "Russian", zh: "Mandarin Chinese",
+};
+const LANG_EXAMPLES: Record<string, string> = {
+  es: "¡Hola!", en: "Hey!", de: "Hallo!", ja: "こんにちは！", ru: "Привет!", zh: "你好！",
+};
+
 function buildPrompt(match: MatchProfile, history: HistoryItem[], userMessage: string): string {
   const recentHistory = history.slice(-8)
     .map((m) => `${m.from === "me" ? "User" : match.name}: ${m.text}`)
     .join("\n");
 
-  return `You are ${match.name}, a ${match.country} native speaker of ${match.nativeLang}.
-You're having a friendly language exchange conversation. Reply naturally in ${match.nativeLang}.
-Keep replies short (1-3 sentences). Be warm and encouraging about language learning.
+  const langName = LANG_NAMES[match.nativeLang] ?? match.nativeLang;
+  const langExample = LANG_EXAMPLES[match.nativeLang] ?? "";
+
+  return `You are ${match.name}, from ${match.country}. Your native language is ${langName} (code: ${match.nativeLang}).
+CRITICAL: You MUST reply ONLY in ${langName}. Never use English unless ${langName} IS English.
+Example of how you write: "${langExample}"
+You are having a friendly language exchange chat. Keep replies short (1-3 sentences). Be warm.
 ${match.interests?.length ? `Your interests: ${match.interests.join(", ")}.` : ""}
 
 Recent conversation:
 ${recentHistory || "(start of conversation)"}
 
 User: ${userMessage}
-${match.name}:`;
+${match.name} (reply in ${langName} only):`;
 }
 
 async function tryCustomBackend(

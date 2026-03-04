@@ -11,13 +11,13 @@ export function generateConversationStarters(me: ProfileData, other: MatchProfil
   const common = (other.interests ?? []).filter((i) => myInterests.includes(i));
 
   if (common.length > 0) {
-    starters.push(`How did you get into ${common[0]}?`);
+    starters.push(`¿Cómo empezaste con ${common[0]}?`);
     starters.push(`What’s your favorite thing about ${common[0]}?`);
   }
 
-  starters.push(`What is something people misunderstand about ${other.country}?`);
-  starters.push(`What music is popular in ${other.country} right now?`);
-  starters.push(`How do people usually make friends in ${other.country}?`);
+  starters.push(`¿Qué es lo que más se malentiende sobre ${other.country}?`);
+  starters.push(`¿Qué música está de moda en ${other.country} ahora?`);
+  starters.push(`¿Cómo se hacen amigos normalmente en ${other.country}?`);
 
   return starters.slice(0, 4);
 }

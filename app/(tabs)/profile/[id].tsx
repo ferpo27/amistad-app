@@ -1,16 +1,24 @@
-// app/(tabs)/profile.tsx
-import React, { useCallback, useEffect, useRef, useState } from "react";
+// app/(tabs)/profile/[id].tsx
+//
+// ┌─ Si la ruta trae un {id}  → muestra PublicProfile (perfil de otro usuario)
+// └─ Si no hay id             → muestra MyProfileScreen (tu perfil, código original intacto)
+//
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ScrollView, Text, View, Pressable, Platform,
   Image, Alert, AppState, type AppStateStatus,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/src/theme";
 import {
   getProfile, updateProfile, addStoryPhoto, removeStoryPhoto,
   type LearningLang, type StoryItem,
 } from "@/src/storage";
 import * as ImagePicker from "expo-image-picker";
+import { PROFILES } from "../../../src/mock/profiles";
+import { MATCHES } from "../../../src/mock/matches";
+
+// ─── Constantes compartidas (igual que las tuyas) ────────────────────────────
 
 const FLAGS: Record<string, string> = {
   es: "🇦🇷", en: "🇺🇸", de: "🇩🇪", ja: "🇯🇵", ru: "🇷🇺", zh: "🇨🇳",
@@ -30,7 +38,256 @@ function timeLeft(expiresAt?: number): string | null {
   return `${m}m`;
 }
 
-export default function MyProfileScreen() {
+// ─── NUEVO: Perfil público de otro usuario ───────────────────────────────────
+
+function PublicProfile({ id }: { id: string }) {
+  const router = useRouter();
+  const { colors } = useTheme();
+
+  // Busca en PROFILES primero (datos completos), luego en MATCHES (datos básicos)
+  const profile = useMemo(() => {
+    const p = PROFILES.find((x) => x.id === id);
+    if (p) return {
+      id: p.id,
+      name: p.name,
+      country: p.country,
+      city: p.city,
+      nativeLang: p.nativeLang,
+      learning: p.learning,
+      bio: p.bio,
+      interests: p.interests,
+      photos: p.photos,
+      // Stories de PROFILES tienen `photos: string[]`, normalizamos a uri
+      stories: p.stories.map((s) => ({ id: s.id, title: s.title, uri: s.photos?.[0] ?? "", ts: s.ts })),
+    };
+    const m = MATCHES.find((x) => String(x.id) === id);
+    if (m) return {
+      id: m.id,
+      name: m.name,
+      country: m.country,
+      city: "",
+      nativeLang: m.nativeLang,
+      learning: m.learning,
+      bio: m.bio,
+      interests: m.interests,
+      photos: m.photos ?? [],
+      stories: [] as { id: string; title: string; uri: string; ts: number }[],
+    };
+    return null;
+  }, [id]);
+
+  if (!profile) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "700" }}>Perfil no encontrado</Text>
+        <Pressable onPress={() => router.back()} style={{ marginTop: 16 }}>
+          <Text style={{ color: colors.accent, fontWeight: "900" }}>← Volver</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const initials = profile.name.slice(0, 2).toUpperCase();
+  const photo = profile.photos?.[0];
+
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      contentContainerStyle={{ paddingBottom: 40 }}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Header con botón volver */}
+      <View style={{
+        paddingTop: Platform.OS === "ios" ? 58 : 24,
+        paddingHorizontal: 16, paddingBottom: 12,
+        flexDirection: "row", alignItems: "center", gap: 12,
+        borderBottomWidth: 1, borderBottomColor: colors.border,
+      }}>
+        <Pressable
+          onPress={() => router.back()}
+          style={{
+            width: 40, height: 40, borderRadius: 20,
+            borderWidth: 1, borderColor: colors.border,
+            backgroundColor: colors.card,
+            alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 18 }}>←</Text>
+        </Pressable>
+        <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 18 }}>Perfil</Text>
+      </View>
+
+      {/* Hero */}
+      <View style={{
+        paddingTop: 28, paddingHorizontal: 24, paddingBottom: 28,
+        alignItems: "center",
+        borderBottomWidth: 1, borderBottomColor: colors.border,
+      }}>
+        {/* Avatar */}
+        <View style={{
+          width: 100, height: 100, borderRadius: 50,
+          borderWidth: 3, borderColor: colors.accent,
+          overflow: "hidden", backgroundColor: colors.accent,
+          alignItems: "center", justifyContent: "center", marginBottom: 14,
+        }}>
+          {photo
+            ? <Image source={{ uri: photo }} style={{ width: 100, height: 100 }} resizeMode="cover" />
+            : <Text style={{ color: "#fff", fontSize: 36, fontWeight: "900" }}>{initials}</Text>
+          }
+        </View>
+
+        <Text style={{ color: colors.fg, fontSize: 26, fontWeight: "900", textAlign: "center" }}>
+          {profile.name}
+        </Text>
+        <Text style={{ color: colors.fg, opacity: 0.45, fontWeight: "700", marginTop: 4, fontSize: 14 }}>
+          📍 {profile.city ? `${profile.city}, ` : ""}{profile.country}
+        </Text>
+        {profile.bio ? (
+          <Text style={{
+            color: colors.fg, opacity: 0.65, fontWeight: "600",
+            marginTop: 10, textAlign: "center", lineHeight: 20,
+            paddingHorizontal: 16, fontSize: 14,
+          }}>
+            {profile.bio}
+          </Text>
+        ) : null}
+
+        {/* Botón abrir chat */}
+        <Pressable
+          onPress={() => router.push(`/(tabs)/chat/${profile.id}` as any)}
+          style={{
+            marginTop: 20, backgroundColor: colors.accent,
+            paddingVertical: 14, borderRadius: 99,
+            width: "100%", alignItems: "center",
+          }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>
+            💬 Abrir chat con {profile.name}
+          </Text>
+        </Pressable>
+      </View>
+
+      <View style={{ padding: 20, gap: 24 }}>
+
+        {/* Idiomas */}
+        <View>
+          <Text style={{
+            color: colors.fg, opacity: 0.5, fontWeight: "800",
+            fontSize: 12, letterSpacing: 1, marginBottom: 10,
+          }}>
+            IDIOMAS
+          </Text>
+          <View style={{ gap: 10 }}>
+            {/* Nativo */}
+            <View style={{
+              backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+              borderRadius: 16, padding: 14,
+              flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "700", fontSize: 13 }}>Nativo</Text>
+              <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 16 }}>
+                {FLAGS[profile.nativeLang] ?? "🌍"}  {LANG_NAMES[profile.nativeLang] ?? profile.nativeLang}
+              </Text>
+            </View>
+            {/* Aprendiendo */}
+            {(profile.learning ?? []).map((l, i) => (
+              <View key={i} style={{
+                backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+                borderRadius: 16, padding: 14,
+                flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+              }}>
+                <Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "700", fontSize: 13 }}>Aprende</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 16 }}>
+                    {FLAGS[l.lang] ?? "🌍"}  {LANG_NAMES[l.lang] ?? l.lang}
+                  </Text>
+                  {l.level ? (
+                    <View style={{
+                      backgroundColor: colors.accentSoft, borderRadius: 99,
+                      paddingHorizontal: 10, paddingVertical: 4,
+                      borderWidth: 1, borderColor: colors.accent + "40",
+                    }}>
+                      <Text style={{ color: colors.accent, fontWeight: "900", fontSize: 12 }}>{l.level}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Intereses */}
+        {(profile.interests ?? []).length > 0 && (
+          <View>
+            <Text style={{
+              color: colors.fg, opacity: 0.5, fontWeight: "800",
+              fontSize: 12, letterSpacing: 1, marginBottom: 10,
+            }}>
+              INTERESES
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {profile.interests.map((x) => (
+                <View key={x} style={{
+                  backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+                  borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7,
+                }}>
+                  <Text style={{ color: colors.fg, fontWeight: "700", fontSize: 13 }}>{x}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Historias del perfil público */}
+        {(profile.stories ?? []).length > 0 && (
+          <View>
+            <Text style={{
+              color: colors.fg, opacity: 0.5, fontWeight: "800",
+              fontSize: 12, letterSpacing: 1, marginBottom: 10,
+            }}>
+              HISTORIAS
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+              {profile.stories.map((s) => s.uri ? (
+                <View key={s.id}>
+                  <Image
+                    source={{ uri: s.uri }}
+                    style={{ width: 90, height: 140, borderRadius: 16, borderWidth: 2, borderColor: colors.accent }}
+                  />
+                  {s.title ? (
+                    <Text style={{
+                      color: colors.fg, fontSize: 10, fontWeight: "700",
+                      textAlign: "center", marginTop: 4, opacity: 0.6,
+                    }}>
+                      {s.title}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null)}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Botón chat abajo también */}
+        <Pressable
+          onPress={() => router.push(`/(tabs)/chat/${profile.id}` as any)}
+          style={{
+            backgroundColor: colors.accent, paddingVertical: 14,
+            borderRadius: 16, alignItems: "center",
+          }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>
+            💬 Abrir chat con {profile.name}
+          </Text>
+        </Pressable>
+      </View>
+    </ScrollView>
+  );
+}
+
+// ─── TU CÓDIGO ORIGINAL — SIN TOCAR NADA ────────────────────────────────────
+
+function MyProfileScreen() {
   const router = useRouter();
   const { colors } = useTheme();
 
@@ -469,4 +726,13 @@ export default function MyProfileScreen() {
       </View>
     </ScrollView>
   );
+}
+
+// ─── Router: decide qué mostrar según los params ─────────────────────────────
+// /{id}  → PublicProfile (perfil de otro usuario con botón "Abrir chat")
+// /      → MyProfileScreen (tu perfil original, sin cambios)
+export default function ProfileRoute() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  if (id) return <PublicProfile id={id} />;
+  return <MyProfileScreen />;
 }
