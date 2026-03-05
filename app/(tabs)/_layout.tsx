@@ -3,9 +3,11 @@ import React from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useThemeMode } from "../../src/theme";
+import { useTranslation } from "react-i18next";
 
 export default function TabsLayout() {
   const { colors } = useThemeMode();
+  const { t } = useTranslation();
 
   return (
     <Tabs
@@ -25,7 +27,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: "Home",
+          title: t("home"),
           tabBarIcon: ({ color, size }) => <Ionicons name="home" color={color} size={size} />,
         }}
       />
@@ -33,7 +35,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="chats"
         options={{
-          title: "Chats",
+          title: t("chats"),
           tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" color={color} size={size} />,
         }}
       />
@@ -41,7 +43,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="matches"
         options={{
-          title: "Matches",
+          title: t("matches"),
           tabBarIcon: ({ color, size }) => <Ionicons name="people" color={color} size={size} />,
         }}
       />
@@ -49,7 +51,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Perfil",
+          title: t("profile"),
           tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} />,
         }}
       />
@@ -57,7 +59,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Ajustes",
+          title: t("settings"),
           tabBarIcon: ({ color, size }) => <Ionicons name="settings" color={color} size={size} />,
         }}
       />
@@ -69,7 +71,7 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="profile/[id]"
-        options={{ href: null, title: "Perfil" }}
+        options={{ href: null, title: t("profile") }}
       />
     </Tabs>
   );

@@ -63,11 +63,12 @@ export default function HomeScreen() {
 
   const me = useMemo(() => {
     if (myProfile) {
+      const learningLangs = (myProfile.languageLearning?.learn ?? []).map((x: any) => x.lang);
       return {
         interests: myProfile.interests ?? [],
         nativeLang: myProfile.nativeLang,
-        learning: (myProfile.languageLearning?.learn ?? []).map((x: any) => x.lang),
-        goalLanguage: "EN",
+        learning: learningLangs,
+        goalLanguage: learningLangs[0] ?? "EN",
       };
     }
     return { interests: ["Fitness", "Trading", "Tech", "Music", "Travel", "Movies"], goalLanguage: "EN" };
