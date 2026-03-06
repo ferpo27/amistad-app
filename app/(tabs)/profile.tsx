@@ -20,6 +20,7 @@ import {
   type StoryItem,
 } from "@/src/storage";
 import * as ImagePicker from "expo-image-picker";
+import { uploadProfilePhoto, upsertMyProfile } from "../../src/storage/profilesStorage";
 
 const FLAGS: Record<string, string> = {
   es: "🇦🇷",
@@ -90,34 +91,18 @@ export default function MyProfileScreen() {
   const initials = pName.trim().slice(0, 2).toUpperCase() || "?";
 
   const pickProfilePhoto = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (perm.status !== "granted") {
-      Alert.alert("Permiso necesario", "Necesitamos acceso a tu galería para elegir una foto.");
-      return;
+    try {
+      // Subir al bucket "avatars" de Supabase y obtener URL pública
+      const publicUrl = await uploadProfilePhoto();
+      if (!publicUrl) return;
+      setPhotoUri(publicUrl);
+      // Guardar URL en perfil local y en Supabase
+      await updateProfile({ photoUri: publicUrl } as any);
+      await upsertMyProfile({ photoUrl: publicUrl });
+      await load();
+    } catch (e) {
+      Alert.alert("Error", "No se pudo subir la foto.");
     }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (result.canceled) {
-      Alert.alert("Cancelado", "No seleccionaste ninguna foto.");
-      return;
-    }
-
-    const asset = result.assets?.[0];
-    if (!asset?.uri) {
-      Alert.alert("Error", "No pudimos leer la imagen seleccionada.");
-      return;
-    }
-
-    const uri = asset.uri;
-    setPhotoUri(uri);
-    await updateProfile({ photoUri: uri } as any);
-    await load();
   };
 
   const addStory = async () => {

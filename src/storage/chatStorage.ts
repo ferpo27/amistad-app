@@ -1,31 +1,50 @@
 // src/storage/chatStorage.ts
-// ─────────────────────────────────────────────────────────────
-//  Chats persistidos en Supabase (tabla messages).
-//  Reemplaza AsyncStorage para chats.
-//
-//  SQL para crear la tabla en Supabase → Editor SQL:
-//
-//  create table if not exists messages (
-//    id          uuid primary key default gen_random_uuid(),
-//    match_id    text not null,
-//    user_id     uuid not null references auth.users(id) on delete cascade,
-//    from_user   text not null check (from_user in ('me','them')),
-//    text        text not null,
-//    ts          bigint not null default extract(epoch from now()) * 1000
-//  );
-//  alter table messages enable row level security;
-//  create policy "solo yo veo mis mensajes" on messages
-//    for all using (auth.uid() = user_id);
-// ─────────────────────────────────────────────────────────────
+// Bots → AsyncStorage local | Usuarios reales → Supabase Realtime
 import { supabase } from "../lib/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { ChatMessage } from "../storage";
 
-// ── Leer historial ────────────────────────────────────────────
-export async function getChatRemote(matchId: string): Promise<ChatMessage[]> {
+export const BOT_IDS = ["anna_de", "hiro_ja", "li_zh", "ivan_ru", "masha_ru"];
+export const isBot = (id: string) => BOT_IDS.includes(id);
+
+// ── LOCAL (bots) ──────────────────────────────────────────────
+
+async function getChatLocal(matchId: string): Promise<ChatMessage[]> {
+  try {
+    const raw = await AsyncStorage.getItem(`chat:${matchId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+async function appendChatLocal(
+  matchId: string,
+  msg: Omit<ChatMessage, "id" | "ts">
+): Promise<ChatMessage[]> {
+  const history = await getChatLocal(matchId);
+  const newMsg: ChatMessage = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    ts: Date.now(),
+    from: msg.from,
+    text: msg.text,
+  };
+  const updated = [...history, newMsg];
+  await AsyncStorage.setItem(`chat:${matchId}`, JSON.stringify(updated));
+  return updated;
+}
+
+// ── REMOTO (usuarios reales) ──────────────────────────────────
+
+async function getMyUserId(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data?.session?.user?.id ?? null;
+}
+
+async function getChatRemote(conversationId: string): Promise<ChatMessage[]> {
+  const myId = await getMyUserId();
   const { data, error } = await supabase
     .from("messages")
-    .select("id, ts, from_user, text")
-    .eq("match_id", matchId)
+    .select("id, ts, sender_id, text")
+    .eq("conversation_id", conversationId)
     .order("ts", { ascending: true });
 
   if (error) {
@@ -36,34 +55,29 @@ export async function getChatRemote(matchId: string): Promise<ChatMessage[]> {
   return (data ?? []).map((row: any) => ({
     id: row.id,
     ts: row.ts,
-    from: row.from_user as "me" | "them",
+    from: row.sender_id === myId ? ("me" as const) : ("them" as const),
     text: row.text,
   }));
 }
 
-// ── Agregar mensaje ───────────────────────────────────────────
-export async function appendChatRemote(
-  matchId: string,
-  message: Omit<ChatMessage, "id" | "ts"> & Partial<Pick<ChatMessage, "id" | "ts">>
+async function appendChatRemote(
+  conversationId: string,
+  receiverId: string | null,
+  msg: Omit<ChatMessage, "id" | "ts">
 ): Promise<ChatMessage | null> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData?.session?.user?.id;
-  if (!userId) {
-    console.warn("[chatStorage] No hay usuario autenticado");
-    return null;
-  }
-
-  const row = {
-    match_id: matchId,
-    user_id: userId,
-    from_user: message.from,
-    text: message.text,
-    ts: message.ts ?? Date.now(),
-  };
+  const myId = await getMyUserId();
+  if (!myId) return null;
 
   const { data, error } = await supabase
     .from("messages")
-    .insert(row)
+    .insert({
+      conversation_id: conversationId,
+      sender_id: myId,
+      receiver_id: receiverId,
+      text: msg.text,
+      ts: Date.now(),
+      is_bot: false,
+    })
     .select()
     .single();
 
@@ -72,19 +86,33 @@ export async function appendChatRemote(
     return null;
   }
 
-  return {
-    id: data.id,
-    ts: data.ts,
-    from: data.from_user as "me" | "them",
-    text: data.text,
-  };
+  return { id: data.id, ts: data.ts, from: "me", text: data.text };
 }
 
-// ── Suscripción Realtime ──────────────────────────────────────
+// ── API PÚBLICA ───────────────────────────────────────────────
+
+export async function getChat(matchId: string): Promise<ChatMessage[]> {
+  if (isBot(matchId)) return getChatLocal(matchId);
+  return getChatRemote(matchId);
+}
+
+export async function appendChat(
+  matchId: string,
+  msg: Omit<ChatMessage, "id" | "ts">
+): Promise<ChatMessage[]> {
+  if (isBot(matchId)) return appendChatLocal(matchId, msg);
+  await appendChatRemote(matchId, matchId, msg);
+  return getChatRemote(matchId);
+}
+
+// ── REALTIME ─────────────────────────────────────────────────
+
 export function subscribeToChatRealtime(
   matchId: string,
   onNewMessage: (msg: ChatMessage) => void
-) {
+): () => void {
+  if (isBot(matchId)) return () => {};
+
   const channel = supabase
     .channel(`chat:${matchId}`)
     .on(
@@ -93,19 +121,18 @@ export function subscribeToChatRealtime(
         event: "INSERT",
         schema: "public",
         table: "messages",
-        filter: `match_id=eq.${matchId}`,
+        filter: `conversation_id=eq.${matchId}`,
       },
-      (payload) => {
+      async (payload) => {
         const row = payload.new as any;
-        onNewMessage({
-          id: row.id,
-          ts: row.ts,
-          from: row.from_user as "me" | "them",
-          text: row.text,
-        });
+        const myId = await getMyUserId();
+        // Solo mostrar mensajes del otro — los míos ya los agrego localmente
+        if (row.sender_id !== myId) {
+          onNewMessage({ id: row.id, ts: row.ts, from: "them", text: row.text });
+        }
       }
     )
     .subscribe();
 
-  return () => supabase.removeChannel(channel);
+  return () => { supabase.removeChannel(channel); };
 }

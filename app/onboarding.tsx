@@ -10,6 +10,7 @@ import {
   getProfile, setOnboardingDone, updateProfile,
   type LanguageCode, type LanguageGoal, type LanguageLevel, type LearningLang,
 } from "@/src/storage";
+import { upsertMyProfile } from "@/src/storage/profilesStorage";
 import CountryPickerModal from "@/src/components/CountryPickerModal";
 
 const LEARN_LANGS: { code: LanguageCode; label: string; flag: string }[] = [
@@ -97,6 +98,7 @@ export default function Onboarding() {
     learn.every((x) => x.level !== null);
 
   const finish = async () => {
+    // Guardar localmente
     await updateProfile({
       displayName: displayName.trim() || undefined,
       username: username.trim() || undefined,
@@ -105,6 +107,15 @@ export default function Onboarding() {
       interests,
       languageLearning: { learn, goal },
     } as any);
+    // Sincronizar con Supabase
+    await upsertMyProfile({
+      displayName: displayName.trim() || undefined,
+      username: username.trim() || undefined,
+      country: country.trim() || undefined,
+      bio: bio.trim() || undefined,
+      interests,
+      learning: learn.map((x) => ({ lang: x.lang, level: x.level ?? null })),
+    });
     await setOnboardingDone(true);
     router.replace("/(tabs)/home" as any);
   };

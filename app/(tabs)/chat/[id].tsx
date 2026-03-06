@@ -8,6 +8,7 @@ import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from "expo-rou
 import { useThemeMode } from "../../../src/theme";
 import { MATCHES } from "../../../src/mock/matches";
 import { getProfile, getChat, appendChat, getAppLanguage, type ChatMessage } from "../../../src/storage";
+import { subscribeToChatRealtime, isBot } from "../../../src/storage/chatStorage";
 import { generateConversationStarters } from "../../../src/conversation/connectionEngine";
 import { blockUser, reportUser, type ReportReason } from "../../../src/safety";
 import { getBotReply } from "../../../src/bots/botReply";
@@ -259,7 +260,8 @@ export default function ChatScreen() {
       const l = (await getAppLanguage()) ?? "es";
       setUiLang(normalizeUiLang(l));
       const history = await getChat(matchId);
-      if (history.length === 0 && match) {
+      if (history.length === 0 && match && isBot(matchId)) {
+        // Solo bots mandan mensaje inicial automático
         setBotTyping(true);
         const opening = await getBotReply(match, [], "Hola!").catch(() => null);
         setBotTyping(false);
@@ -276,6 +278,13 @@ export default function ChatScreen() {
       setTranslatorErr(ok ? "" : `Traductor no disponible`);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 50);
     })();
+
+    // Realtime solo para usuarios reales
+    const unsub = subscribeToChatRealtime(matchId, (msg) => {
+      setMsgs((prev) => [...prev, msg]);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+    });
+    return unsub;
   }, [matchId]);
 
   useFocusEffect(useCallback(() => {
@@ -299,7 +308,8 @@ export default function ChatScreen() {
     setText("");
     setShowStarters(false);
     await addMessage("me", raw);
-    if (!match) return;
+    // Solo llamar al bot si el chat es con un bot, no con usuario real
+    if (!match || !isBot(matchId)) return;
     setBotTyping(true);
     setTimeout(async () => {
       try {
