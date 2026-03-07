@@ -1,17 +1,19 @@
 // app/(tabs)/matches.tsx
 import React, { useCallback, useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, Platform } from "react-native";
+import { View, Text, ScrollView, Pressable, Platform, ActivityIndicator, Image } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useThemeMode } from "../../src/theme";
 import { PROFILES } from "../../src/mock/profiles";
 import { calculateCompatibility } from "../../src/matching/calculateCompatibility";
 import { getProfile } from "../../src/storage";
+import { getDiscoveryProfiles, type RemoteProfile } from "../../src/storage/profilesStorage";
 
 type AnyProfile = any;
 type RowProfile = {
   id: string; name: string; country?: string;
   native?: string; nativeLang?: string;
-  learningLabel?: string; interests?: string[]; score?: number;
+  learningLabel?: string; interests?: string[];
+  score?: number; photoUrl?: string | null; isReal?: boolean;
 };
 
 const FLAGS: Record<string, string> = {
@@ -38,12 +40,28 @@ function learningToLabel(learning: any): string {
 function normalize(p: AnyProfile): RowProfile {
   return {
     id: String(p?.id ?? ""),
-    name: String(p?.name ?? "—"),
+    name: String(p?.name ?? p?.displayName ?? "—"),
     country: p?.country ? String(p.country) : undefined,
     native: String(p?.native ?? p?.nativeLang ?? ""),
     nativeLang: String(p?.native ?? p?.nativeLang ?? ""),
     learningLabel: learningToLabel(p?.learning),
     interests: Array.isArray(p?.interests) ? p.interests.map(String) : [],
+    photoUrl: p?.photoUrl ?? null,
+    isReal: p?.isReal ?? false,
+  };
+}
+
+function normalizeRemote(p: RemoteProfile): RowProfile {
+  return {
+    id: p.id,
+    name: p.displayName || "—",
+    country: p.country || undefined,
+    native: p.nativeLang,
+    nativeLang: p.nativeLang,
+    learningLabel: learningToLabel(p.learning),
+    interests: p.interests,
+    photoUrl: p.photoUrl,
+    isReal: true,
   };
 }
 
@@ -64,10 +82,16 @@ export default function MatchesScreen() {
   const { colors } = useThemeMode();
   const [tab, setTab] = useState<"compatibles" | "contactos">("compatibles");
   const [myProfile, setMyProfile] = useState<any>(null);
+  const [remoteProfiles, setRemoteProfiles] = useState<RowProfile[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Carga perfil real al enfocar la pantalla
   useFocusEffect(useCallback(() => {
     getProfile().then(setMyProfile);
+    setLoading(true);
+    getDiscoveryProfiles(30)
+      .then((data) => setRemoteProfiles(data.map(normalizeRemote)))
+      .catch(() => setRemoteProfiles([]))
+      .finally(() => setLoading(false));
   }, []));
 
   const me = useMemo(() => {
@@ -84,11 +108,16 @@ export default function MatchesScreen() {
   }, [myProfile]);
 
   const ranked = useMemo(() => {
-    return (PROFILES as AnyProfile[])
-      .map(normalize)
+    const mocks = (PROFILES as AnyProfile[]).map(normalize);
+    const all = [...remoteProfiles, ...mocks];
+    return all
       .map((p) => ({ ...p, score: calculateCompatibility(me, p as any) }))
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  }, [me]);
+      .sort((a, b) => {
+        if (a.isReal && !b.isReal) return -1;
+        if (!a.isReal && b.isReal) return 1;
+        return (b.score ?? 0) - (a.score ?? 0);
+      });
+  }, [me, remoteProfiles]);
 
   const alphabetical = useMemo(() => {
     return groupByLetter([...ranked].sort((a, b) => a.name.localeCompare(b.name)));
@@ -96,7 +125,6 @@ export default function MatchesScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      {/* Header */}
       <View style={{
         paddingTop: Platform.OS === "ios" ? 54 : 22,
         paddingHorizontal: 20, paddingBottom: 16,
@@ -104,10 +132,9 @@ export default function MatchesScreen() {
       }}>
         <Text style={{ color: colors.fg, fontSize: 28, fontWeight: "900" }}>Personas</Text>
         <Text style={{ color: colors.fg, opacity: 0.5, marginTop: 2, fontWeight: "700" }}>
-          {ranked.length} perfiles disponibles
+          {loading ? "Cargando..." : `${ranked.length} perfiles · ${remoteProfiles.length} usuarios reales`}
         </Text>
 
-        {/* Tab selector — tu diseño exacto */}
         <View style={{
           flexDirection: "row", marginTop: 14,
           backgroundColor: colors.card, borderRadius: 12,
@@ -133,12 +160,18 @@ export default function MatchesScreen() {
         </View>
       </View>
 
-      {/* ── TAB COMPATIBLES ────────────────────────────────────────────────── */}
+      {loading && (
+        <View style={{ alignItems: "center", paddingVertical: 20 }}>
+          <ActivityIndicator color={colors.accent} />
+        </View>
+      )}
+
       {tab === "compatibles" ? (
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
           {ranked.map((p, i) => {
             const scorePct = Math.max(0, Math.min(100, Math.round((p.score ?? 0) * 100)));
             const nativeLang = (p.nativeLang ?? p.native ?? "").toLowerCase();
+            const initials = (p.name ?? "?").slice(0, 2).toUpperCase();
             return (
               <Pressable
                 key={p.id}
@@ -150,22 +183,31 @@ export default function MatchesScreen() {
                   backgroundColor: i === 0 ? colors.accentSoft : "transparent",
                 }}
               >
-                {/* Avatar con flag */}
-                <View style={{
-                  width: 50, height: 50, borderRadius: 25,
-                  backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-                  alignItems: "center", justifyContent: "center", marginRight: 14,
-                }}>
-                  <Text style={{ fontSize: 22 }}>{FLAGS[nativeLang] ?? "🌐"}</Text>
-                </View>
+                {p.photoUrl ? (
+                  <Image source={{ uri: p.photoUrl }} style={{ width: 50, height: 50, borderRadius: 25, marginRight: 14 }} />
+                ) : (
+                  <View style={{
+                    width: 50, height: 50, borderRadius: 25,
+                    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+                    alignItems: "center", justifyContent: "center", marginRight: 14,
+                  }}>
+                    <Text style={{ fontSize: p.isReal ? 18 : 22 }}>
+                      {p.isReal ? initials : (FLAGS[nativeLang] ?? "🌐")}
+                    </Text>
+                  </View>
+                )}
 
-                {/* Info */}
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 16 }}>{p.name}</Text>
                     {i === 0 && (
                       <View style={{ backgroundColor: colors.accent, borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 }}>
                         <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900" }}>TOP</Text>
+                      </View>
+                    )}
+                    {p.isReal && (
+                      <View style={{ backgroundColor: "#22c55e22", borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 }}>
+                        <Text style={{ color: "#22c55e", fontSize: 10, fontWeight: "900" }}>● REAL</Text>
                       </View>
                     )}
                   </View>
@@ -179,7 +221,6 @@ export default function MatchesScreen() {
                   )}
                 </View>
 
-                {/* Score + chevron */}
                 <View style={{ alignItems: "flex-end", marginLeft: 10, gap: 4 }}>
                   <Text style={{ color: scorePct >= 40 ? colors.accent : colors.fg, fontWeight: "900", fontSize: 18 }}>
                     {scorePct}%
@@ -190,13 +231,10 @@ export default function MatchesScreen() {
             );
           })}
         </ScrollView>
-
       ) : (
-        /* ── TAB CONTACTOS — lista alfabética ────────────────────────────── */
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
           {alphabetical.map(({ letter, items }) => (
             <View key={letter}>
-              {/* Separador de letra */}
               <View style={{
                 paddingHorizontal: 20, paddingVertical: 6,
                 backgroundColor: colors.card,
@@ -204,9 +242,9 @@ export default function MatchesScreen() {
               }}>
                 <Text style={{ color: colors.accent, fontWeight: "900", fontSize: 13 }}>{letter}</Text>
               </View>
-
               {items.map((p) => {
                 const nativeLang = (p.nativeLang ?? p.native ?? "").toLowerCase();
+                const initials = (p.name ?? "?").slice(0, 2).toUpperCase();
                 return (
                   <Pressable
                     key={p.id}
@@ -217,15 +255,28 @@ export default function MatchesScreen() {
                       borderBottomWidth: 1, borderBottomColor: colors.border,
                     }}
                   >
-                    <View style={{
-                      width: 44, height: 44, borderRadius: 22,
-                      backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-                      alignItems: "center", justifyContent: "center", marginRight: 14,
-                    }}>
-                      <Text style={{ fontSize: 20 }}>{FLAGS[nativeLang] ?? "🌐"}</Text>
-                    </View>
+                    {p.photoUrl ? (
+                      <Image source={{ uri: p.photoUrl }} style={{ width: 44, height: 44, borderRadius: 22, marginRight: 14 }} />
+                    ) : (
+                      <View style={{
+                        width: 44, height: 44, borderRadius: 22,
+                        backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+                        alignItems: "center", justifyContent: "center", marginRight: 14,
+                      }}>
+                        <Text style={{ fontSize: p.isReal ? 16 : 20 }}>
+                          {p.isReal ? initials : (FLAGS[nativeLang] ?? "🌐")}
+                        </Text>
+                      </View>
+                    )}
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 16 }}>{p.name}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 16 }}>{p.name}</Text>
+                        {p.isReal && (
+                          <View style={{ backgroundColor: "#22c55e22", borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2 }}>
+                            <Text style={{ color: "#22c55e", fontSize: 10, fontWeight: "900" }}>● REAL</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={{ color: colors.fg, opacity: 0.5, fontSize: 13, fontWeight: "700", marginTop: 1 }}>
                         {p.country ?? "—"} · Aprende: {p.learningLabel ?? "—"}
                       </Text>

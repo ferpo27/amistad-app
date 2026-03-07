@@ -1,11 +1,12 @@
 // app/(tabs)/home.tsx
 import React, { useCallback, useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, TextInput, Platform, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, Pressable, TextInput, Platform, ActivityIndicator, Image } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useThemeMode } from "../../src/theme";
 import { PROFILES } from "../../src/mock/profiles";
 import { calculateCompatibility } from "../../src/matching/calculateCompatibility";
 import { getProfile } from "../../src/storage";
+import { getDiscoveryProfiles, type RemoteProfile } from "../../src/storage/profilesStorage";
 
 type AnyProfile = any;
 
@@ -18,6 +19,8 @@ type DiscoverProfile = {
   learningLabel?: string;
   interests?: string[];
   score?: number;
+  photoUrl?: string | null;
+  isReal?: boolean;
 };
 
 function learningToLabel(learning: any): string {
@@ -40,12 +43,28 @@ function learningToLabel(learning: any): string {
 function normalizeProfile(p: AnyProfile): DiscoverProfile {
   return {
     id: String(p?.id ?? ""),
-    name: String(p?.name ?? "—"),
+    name: String(p?.name ?? p?.displayName ?? "—"),
     country: p?.country ? String(p.country) : undefined,
     native: String(p?.native ?? p?.nativeLang ?? "—"),
     learning: p?.learning,
     learningLabel: learningToLabel(p?.learning),
     interests: Array.isArray(p?.interests) ? p.interests.map(String) : [],
+    photoUrl: p?.photoUrl ?? null,
+    isReal: p?.isReal ?? false,
+  };
+}
+
+function normalizeRemote(p: RemoteProfile): DiscoverProfile {
+  return {
+    id: p.id,
+    name: p.displayName || "—",
+    country: p.country || undefined,
+    native: p.nativeLang,
+    learning: p.learning,
+    learningLabel: learningToLabel(p.learning),
+    interests: p.interests,
+    photoUrl: p.photoUrl,
+    isReal: true,
   };
 }
 
@@ -55,10 +74,17 @@ export default function HomeScreen() {
   const [query, setQuery] = useState("");
   const [onlyTop, setOnlyTop] = useState(true);
   const [myProfile, setMyProfile] = useState<any>(null);
+  const [remoteProfiles, setRemoteProfiles] = useState<DiscoverProfile[]>([]);
+  const [loadingRemote, setLoadingRemote] = useState(false);
 
-  // Carga perfil real al enfocar la pantalla
   useFocusEffect(useCallback(() => {
     getProfile().then(setMyProfile);
+    // Cargar perfiles reales de Supabase
+    setLoadingRemote(true);
+    getDiscoveryProfiles(30)
+      .then((data) => setRemoteProfiles(data.map(normalizeRemote)))
+      .catch(() => setRemoteProfiles([]))
+      .finally(() => setLoadingRemote(false));
   }, []));
 
   const me = useMemo(() => {
@@ -75,8 +101,10 @@ export default function HomeScreen() {
   }, [myProfile]);
 
   const scored = useMemo(() => {
-    const base = (PROFILES as AnyProfile[]).map(normalizeProfile);
-    const list = base.map((p) => ({ ...p, score: calculateCompatibility(me, p) }));
+    // Combinar perfiles reales (primero) + mocks de bots
+    const mockBase = (PROFILES as AnyProfile[]).map(normalizeProfile);
+    const all = [...remoteProfiles, ...mockBase];
+    const list = all.map((p) => ({ ...p, score: calculateCompatibility(me, p as any) }));
     const q = query.trim().toLowerCase();
     const filtered = q.length === 0 ? list : list.filter((p) => {
       return (
@@ -85,9 +113,14 @@ export default function HomeScreen() {
         (p.interests ?? []).some((x: string) => x.toLowerCase().includes(q))
       );
     });
-    filtered.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    filtered.sort((a, b) => {
+      // Perfiles reales primero, luego por score
+      if (a.isReal && !b.isReal) return -1;
+      if (!a.isReal && b.isReal) return 1;
+      return (b.score ?? 0) - (a.score ?? 0);
+    });
     return onlyTop ? filtered.slice(0, 12) : filtered;
-  }, [query, onlyTop, me]);
+  }, [query, onlyTop, me, remoteProfiles]);
 
   const top3 = scored.slice(0, 3);
 
@@ -102,7 +135,7 @@ export default function HomeScreen() {
           {myProfile?.displayName ? `Hola, ${myProfile.displayName.split(" ")[0]} 👋` : "Descubrí gente"}
         </Text>
         <Text style={{ color: colors.fg, opacity: 0.75, marginTop: 4 }}>
-          Ordenado por compatibilidad (intereses + idioma)
+          {loadingRemote ? "Cargando perfiles..." : `${remoteProfiles.length} usuarios reales · ordenado por compatibilidad`}
         </Text>
 
         <View style={{ marginTop: 12, flexDirection: "row", gap: 10 }}>
@@ -148,6 +181,12 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        {loadingRemote && (
+          <View style={{ alignItems: "center", paddingVertical: 20 }}>
+            <ActivityIndicator color={colors.accent} />
+          </View>
+        )}
+
         <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 18 }}>Top picks para vos</Text>
         <Text style={{ color: colors.fg, opacity: 0.7, marginTop: 4 }}>
           Los 3 perfiles más compatibles ahora mismo.
@@ -189,6 +228,7 @@ function ProfileCard({ p, colors, isTop, onOpen, onProfile }: {
   const score = typeof p.score === "number" ? p.score : 0;
   const scorePct = Math.max(0, Math.min(100, Math.round(score * 100)));
   const scoreColor = scorePct >= 60 ? "#22c55e" : scorePct >= 35 ? colors.accent : colors.fg;
+  const initials = (p.name ?? "?").slice(0, 2).toUpperCase();
 
   return (
     <View style={{
@@ -197,20 +237,39 @@ function ProfileCard({ p, colors, isTop, onOpen, onProfile }: {
       borderRadius: 18, padding: 14,
     }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <View style={{ gap: 2, flexShrink: 1, flex: 1, marginRight: 8 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 18 }}>
-              {p.name} {p.country ? `• ${p.country}` : ""}
+        <View style={{ flexDirection: "row", gap: 10, flex: 1, marginRight: 8 }}>
+          {/* Avatar */}
+          {p.photoUrl ? (
+            <Image source={{ uri: p.photoUrl }} style={{ width: 44, height: 44, borderRadius: 22 }} />
+          ) : (
+            <View style={{
+              width: 44, height: 44, borderRadius: 22,
+              backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent + "44",
+              alignItems: "center", justifyContent: "center",
+            }}>
+              <Text style={{ color: colors.accent, fontWeight: "900", fontSize: 16 }}>{initials}</Text>
+            </View>
+          )}
+          <View style={{ gap: 2, flexShrink: 1, flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 18 }}>
+                {p.name} {p.country ? `• ${p.country}` : ""}
+              </Text>
+              {isTop && (
+                <View style={{ backgroundColor: "#FFD700", borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 }}>
+                  <Text style={{ color: "#000", fontSize: 10, fontWeight: "900" }}>✦ TOP</Text>
+                </View>
+              )}
+              {p.isReal && (
+                <View style={{ backgroundColor: "#22c55e22", borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 }}>
+                  <Text style={{ color: "#22c55e", fontSize: 10, fontWeight: "900" }}>● REAL</Text>
+                </View>
+              )}
+            </View>
+            <Text style={{ color: colors.fg, opacity: 0.75, fontWeight: "700" }}>
+              Native: {p.native ?? "—"} • Learning: {p.learningLabel ?? "—"}
             </Text>
-            {isTop && (
-              <View style={{ backgroundColor: "#FFD700", borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 }}>
-                <Text style={{ color: "#000", fontSize: 10, fontWeight: "900" }}>✦ TOP</Text>
-              </View>
-            )}
           </View>
-          <Text style={{ color: colors.fg, opacity: 0.75, fontWeight: "700" }}>
-            Native: {p.native ?? "—"} • Learning: {p.learningLabel ?? "—"}
-          </Text>
         </View>
         <View style={{ alignItems: "flex-end" }}>
           <Text style={{ color: scoreColor, fontWeight: "900" }}>{scorePct}%</Text>
@@ -244,16 +303,6 @@ function ProfileCard({ p, colors, isTop, onOpen, onProfile }: {
           style={{ flex: 1, backgroundColor: colors.accent, paddingVertical: 12, borderRadius: 14, alignItems: "center" }}
         >
           <Text style={{ color: "white", fontWeight: "900" }}>Abrir chat</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => {}}
-          style={{
-            paddingHorizontal: 14, backgroundColor: colors.bg,
-            borderWidth: 1, borderColor: colors.border, borderRadius: 14,
-            alignItems: "center", justifyContent: "center",
-          }}
-        >
-          <Text style={{ color: colors.fg, fontWeight: "900" }}>⋯</Text>
         </Pressable>
       </View>
     </View>

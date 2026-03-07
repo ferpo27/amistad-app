@@ -1,13 +1,14 @@
 // app/(tabs)/chats.tsx
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   FlatList, Pressable, Text, View,
-  Platform, ActivityIndicator,
+  Platform, ActivityIndicator, Image,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { MATCHES } from "../../src/mock/matches";
 import { getChat, type ChatMessage } from "../../src/storage";
 import { useThemeMode } from "../../src/theme";
+import { supabase } from "../../src/lib/supabase";
 
 type ChatPreview = {
   id: string;
@@ -17,6 +18,8 @@ type ChatPreview = {
   lastMessage: string;
   lastTs: number;
   unread: number;
+  photoUrl?: string | null;
+  isReal?: boolean;
 };
 
 function timeAgo(ts: number): string {
@@ -26,8 +29,7 @@ function timeAgo(ts: number): string {
   if (mins < 60) return mins + "m";
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return hrs + "h";
-  const days = Math.floor(hrs / 24);
-  return days + "d";
+  return Math.floor(hrs / 24) + "d";
 }
 
 export default function ChatsScreen() {
@@ -37,7 +39,10 @@ export default function ChatsScreen() {
   const [loading, setLoading] = useState(true);
 
   async function loadPreviews() {
+    setLoading(true);
     const results: ChatPreview[] = [];
+
+    // 1. Chats con bots (AsyncStorage local)
     for (const match of MATCHES) {
       const history: ChatMessage[] = await getChat(match.id);
       const last = history[history.length - 1];
@@ -49,9 +54,65 @@ export default function ChatsScreen() {
         lastMessage: last ? last.text : "Sin mensajes aún",
         lastTs: last ? last.ts : 0,
         unread: 0,
+        isReal: false,
       });
     }
-    // ordenar: con mensajes primero, luego por recencia
+
+    // 2. Chats con usuarios reales (Supabase)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const myId = sessionData?.session?.user?.id;
+
+      if (myId) {
+        // Traer todos los mensajes donde soy sender o receiver
+        const { data: msgs } = await supabase
+          .from("messages")
+          .select("conversation_id, sender_id, receiver_id, text, ts")
+          .or(`sender_id.eq.${myId},receiver_id.eq.${myId}`)
+          .order("ts", { ascending: false })
+          .limit(200);
+
+        if (msgs && msgs.length > 0) {
+          // Agrupar por conversation_id
+          const convMap: Record<string, any> = {};
+          for (const msg of msgs) {
+            if (!convMap[msg.conversation_id]) {
+              convMap[msg.conversation_id] = msg;
+            }
+          }
+
+          // Para cada conversación, obtener el perfil del otro usuario
+          for (const [convId, lastMsg] of Object.entries(convMap)) {
+            const otherId = lastMsg.sender_id === myId ? lastMsg.receiver_id : lastMsg.sender_id;
+
+            // No duplicar si ya es un bot
+            const isBotId = MATCHES.some((m) => m.id === otherId);
+            if (isBotId) continue;
+
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("display_name, country, native_lang, photo_url")
+              .eq("id", otherId)
+              .single();
+
+            results.push({
+              id: otherId,
+              name: profile?.display_name ?? "Usuario",
+              country: profile?.country ?? "",
+              nativeLang: profile?.native_lang ?? "",
+              lastMessage: lastMsg.text ?? "",
+              lastTs: lastMsg.ts ?? 0,
+              unread: 0,
+              photoUrl: profile?.photo_url ?? null,
+              isReal: true,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      // Si falla Supabase igual mostramos bots
+    }
+
     results.sort((a, b) => b.lastTs - a.lastTs);
     setPreviews(results);
     setLoading(false);
@@ -69,7 +130,6 @@ export default function ChatsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      {/* Header */}
       <View style={{
         paddingTop: Platform.OS === "ios" ? 54 : 22,
         paddingHorizontal: 16, paddingBottom: 14,
@@ -88,6 +148,7 @@ export default function ChatsScreen() {
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         renderItem={({ item }) => {
           const hasChat = item.lastTs > 0;
+          const initials = (item.name ?? "?").slice(0, 2).toUpperCase();
           return (
             <Pressable
               onPress={() => router.push("/(tabs)/chat/" + item.id as any)}
@@ -100,23 +161,34 @@ export default function ChatsScreen() {
               })}
             >
               {/* Avatar */}
-              <View style={{
-                width: 48, height: 48, borderRadius: 24,
-                backgroundColor: colors.accentSoft,
-                alignItems: "center", justifyContent: "center",
-                borderWidth: 1, borderColor: colors.accent + "44",
-              }}>
-                <Text style={{ fontSize: 20, fontWeight: "900" }}>
-                  {item.name.charAt(0).toUpperCase()}
-                </Text>
-              </View>
+              {item.photoUrl ? (
+                <Image source={{ uri: item.photoUrl }} style={{ width: 48, height: 48, borderRadius: 24 }} />
+              ) : (
+                <View style={{
+                  width: 48, height: 48, borderRadius: 24,
+                  backgroundColor: colors.accentSoft,
+                  alignItems: "center", justifyContent: "center",
+                  borderWidth: 1, borderColor: colors.accent + "44",
+                }}>
+                  <Text style={{ fontSize: 18, fontWeight: "900", color: colors.accent }}>
+                    {initials}
+                  </Text>
+                </View>
+              )}
 
               {/* Info */}
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 16 }}>
-                    {item.name}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 16 }}>
+                      {item.name}
+                    </Text>
+                    {item.isReal && (
+                      <View style={{ backgroundColor: "#22c55e22", borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: "#22c55e", fontSize: 10, fontWeight: "900" }}>● REAL</Text>
+                      </View>
+                    )}
+                  </View>
                   {hasChat && (
                     <Text style={{ color: colors.fg, opacity: 0.45, fontSize: 12, fontWeight: "700" }}>
                       {timeAgo(item.lastTs)}
@@ -131,11 +203,10 @@ export default function ChatsScreen() {
                   {item.lastMessage}
                 </Text>
                 <Text style={{ color: colors.fg, opacity: 0.45, fontSize: 11, marginTop: 3, fontWeight: "700" }}>
-                  {item.country} • {item.nativeLang.toUpperCase()}
+                  {item.country} {item.nativeLang ? `• ${item.nativeLang.toUpperCase()}` : ""}
                 </Text>
               </View>
 
-              {/* Chevron */}
               <Text style={{ color: colors.fg, opacity: 0.3, fontSize: 18 }}>›</Text>
             </Pressable>
           );
