@@ -1,85 +1,461 @@
 // app/(tabs)/home.tsx
 import React, { useCallback, useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, TextInput, Platform, ActivityIndicator, Image } from "react-native";
+import {
+  View, Text, Pressable, Platform, ActivityIndicator,
+  Image, ScrollView, Dimensions,
+} from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useThemeMode } from "../../src/theme";
+import { Ionicons } from "@expo/vector-icons";
 import { PROFILES } from "../../src/mock/profiles";
 import { calculateCompatibility } from "../../src/matching/calculateCompatibility";
 import { getProfile } from "../../src/storage";
 import { getDiscoveryProfiles, type RemoteProfile } from "../../src/storage/profilesStorage";
+import * as Haptics from "expo-haptics";
 
-type AnyProfile = any;
+const { width: SW } = Dimensions.get("window");
 
+// ─── Tipos ────────────────────────────────────────────────────────────────────
 type DiscoverProfile = {
   id: string;
   name: string;
   country?: string;
+  city?: string;
   native?: string;
   learning?: any;
-  learningLabel?: string;
+  learningLangs?: string[];
   interests?: string[];
   score?: number;
   photoUrl?: string | null;
   isReal?: boolean;
+  bio?: string;
 };
 
-function learningToLabel(learning: any): string {
-  if (!learning) return "—";
-  if (typeof learning === "string") return learning;
-  if (Array.isArray(learning)) {
-    const parts = learning
-      .map((x) => {
-        const code = (x?.code ?? x?.lang ?? "").toString().toUpperCase().trim();
-        const lvl = (x?.level ?? "").toString().toUpperCase().trim();
-        const s = [code, lvl].filter(Boolean).join(" ");
-        return s || null;
-      })
-      .filter(Boolean) as string[];
-    return parts.length ? parts.join(", ") : "—";
-  }
-  return "—";
+const FLAGS: Record<string, string> = {
+  es: "🇦🇷", en: "🇺🇸", de: "🇩🇪",
+  ja: "🇯🇵", ru: "🇷🇺", zh: "🇨🇳",
+};
+const LANG_NAMES: Record<string, string> = {
+  es: "Español", en: "English", de: "Deutsch",
+  ja: "日本語", ru: "Русский", zh: "中文",
+};
+const LANG_CODES = ["en", "de", "ja", "ru", "zh", "es"];
+
+function getLearningLangs(learning: any): string[] {
+  if (!learning) return [];
+  if (Array.isArray(learning))
+    return learning.map((x) => (x?.code ?? x?.lang ?? "").toLowerCase()).filter(Boolean);
+  return [];
 }
 
-function normalizeProfile(p: AnyProfile): DiscoverProfile {
+function normalizeProfile(p: any): DiscoverProfile {
+  const ll = getLearningLangs(p?.learning);
   return {
     id: String(p?.id ?? ""),
     name: String(p?.name ?? p?.displayName ?? "—"),
     country: p?.country ? String(p.country) : undefined,
-    native: String(p?.native ?? p?.nativeLang ?? "—"),
+    city: p?.city ? String(p.city) : undefined,
+    native: String(p?.native ?? p?.nativeLang ?? ""),
     learning: p?.learning,
-    learningLabel: learningToLabel(p?.learning),
+    learningLangs: ll,
     interests: Array.isArray(p?.interests) ? p.interests.map(String) : [],
-    photoUrl: p?.photoUrl ?? null,
-    isReal: p?.isReal ?? false,
+    photoUrl: p?.photoUrl ?? p?.photos?.[0] ?? null,
+    isReal: false,
+    bio: p?.bio ?? "",
   };
 }
 
 function normalizeRemote(p: RemoteProfile): DiscoverProfile {
+  const ll = getLearningLangs(p.learning);
   return {
     id: p.id,
     name: p.displayName || "—",
     country: p.country || undefined,
+    city: p.city || undefined,
     native: p.nativeLang,
     learning: p.learning,
-    learningLabel: learningToLabel(p.learning),
+    learningLangs: ll,
     interests: p.interests,
     photoUrl: p.photoUrl,
     isReal: true,
+    bio: p.bio ?? "",
   };
 }
 
+// ─── Avatar ───────────────────────────────────────────────────────────────────
+function Avatar({ uri, name, size, colors }: {
+  uri?: string | null; name: string; size: number; colors: any;
+}) {
+  const initials = name.slice(0, 2).toUpperCase();
+  return uri ? (
+    <Image
+      source={{ uri }}
+      style={{ width: size, height: size, borderRadius: size / 2 }}
+      resizeMode="cover"
+    />
+  ) : (
+    <View style={{
+      width: size, height: size, borderRadius: size / 2,
+      backgroundColor: colors.accent + "30",
+      alignItems: "center", justifyContent: "center",
+    }}>
+      <Text style={{ color: colors.accent, fontWeight: "800", fontSize: size * 0.34 }}>
+        {initials}
+      </Text>
+    </View>
+  );
+}
+
+// ─── Lang pill ────────────────────────────────────────────────────────────────
+function LangPill({ lang, level, colors, small }: {
+  lang: string; level?: string; colors: any; small?: boolean;
+}) {
+  return (
+    <View style={{
+      flexDirection: "row", alignItems: "center", gap: 5,
+      backgroundColor: colors.card,
+      borderWidth: 1, borderColor: colors.border,
+      borderRadius: 99,
+      paddingHorizontal: small ? 8 : 10,
+      paddingVertical: small ? 4 : 6,
+    }}>
+      <Text style={{ fontSize: small ? 13 : 15 }}>{FLAGS[lang] ?? "🌍"}</Text>
+      <Text style={{
+        color: colors.fg, fontWeight: "700",
+        fontSize: small ? 11 : 13,
+      }}>
+        {LANG_NAMES[lang] ?? lang.toUpperCase()}
+      </Text>
+      {level ? (
+        <Text style={{ color: colors.accent, fontWeight: "800", fontSize: small ? 10 : 11 }}>
+          {level}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+// ─── FEATURED CARD ────────────────────────────────────────────────────────────
+function FeaturedCard({ profile, colors, onChat, onProfile, saved, onSave }: {
+  profile: DiscoverProfile; colors: any;
+  onChat: () => void; onProfile: () => void;
+  saved: boolean; onSave: () => void;
+}) {
+  const learningItems: { lang: string; level?: string }[] = Array.isArray(profile.learning)
+    ? profile.learning.map((x: any) => ({ lang: x?.code ?? x?.lang ?? "", level: x?.level }))
+    : [];
+
+  return (
+    <View style={{
+      borderRadius: 24, overflow: "hidden",
+      borderWidth: 1, borderColor: colors.border,
+      backgroundColor: colors.card,
+      marginHorizontal: 16,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.1, shadowRadius: 20, elevation: 8,
+    }}>
+      {/* Foto superior */}
+      <View style={{ height: 200, backgroundColor: colors.accent + "15" }}>
+        {profile.photoUrl ? (
+          <Image
+            source={{ uri: profile.photoUrl }}
+            style={{ width: "100%", height: "100%" }}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={{
+            flex: 1, alignItems: "center", justifyContent: "center",
+          }}>
+            <Text style={{
+              fontSize: 72, fontWeight: "900",
+              color: colors.accent, opacity: 0.25,
+            }}>
+              {profile.name.slice(0, 2).toUpperCase()}
+            </Text>
+          </View>
+        )}
+
+        {/* Badge real */}
+        {profile.isReal && (
+          <View style={{
+            position: "absolute", top: 12, left: 12,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            borderRadius: 99, paddingHorizontal: 10, paddingVertical: 5,
+            flexDirection: "row", alignItems: "center", gap: 5,
+          }}>
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#34C759" }} />
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>Usuario real</Text>
+          </View>
+        )}
+
+        {/* Guardar */}
+        <Pressable
+          onPress={onSave}
+          style={{
+            position: "absolute", top: 12, right: 12,
+            width: 36, height: 36, borderRadius: 18,
+            backgroundColor: "rgba(0,0,0,0.45)",
+            alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <Ionicons
+            name={saved ? "bookmark" : "bookmark-outline"}
+            size={18}
+            color={saved ? colors.accent : "#fff"}
+          />
+        </Pressable>
+      </View>
+
+      {/* Info */}
+      <View style={{ padding: 16, gap: 12 }}>
+        {/* Nombre + ubicación */}
+        <View>
+          <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 22 }}>
+            {profile.name}
+          </Text>
+          {(profile.city || profile.country) && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 }}>
+              <Ionicons name="location-outline" size={13} color={colors.fg} style={{ opacity: 0.35 }} />
+              <Text style={{ color: colors.fg, opacity: 0.4, fontWeight: "500", fontSize: 13 }}>
+                {[profile.city, profile.country].filter(Boolean).join(", ")}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Idiomas */}
+        <View style={{ gap: 8 }}>
+          <Text style={{
+            color: colors.fg, opacity: 0.4, fontWeight: "700",
+            fontSize: 11, letterSpacing: 1,
+          }}>
+            IDIOMAS
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+            {profile.native && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <LangPill lang={profile.native} colors={colors} />
+                <Text style={{ color: colors.fg, opacity: 0.35, fontSize: 12, fontWeight: "500" }}>
+                  nativo
+                </Text>
+              </View>
+            )}
+            {learningItems.slice(0, 3).map((l, i) => l.lang ? (
+              <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <LangPill lang={l.lang} level={l.level ?? undefined} colors={colors} />
+                <Text style={{ color: colors.fg, opacity: 0.35, fontSize: 12, fontWeight: "500" }}>
+                  aprende
+                </Text>
+              </View>
+            ) : null)}
+          </View>
+        </View>
+
+        {/* Bio */}
+        {profile.bio ? (
+          <Text style={{
+            color: colors.fg, opacity: 0.6, fontSize: 14,
+            fontWeight: "500", lineHeight: 20,
+          }} numberOfLines={2}>
+            {profile.bio}
+          </Text>
+        ) : null}
+
+        {/* Intereses */}
+        {(profile.interests ?? []).length > 0 && (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+            {(profile.interests ?? []).slice(0, 5).map((it) => (
+              <View key={it} style={{
+                backgroundColor: colors.accentSoft,
+                borderRadius: 99, paddingHorizontal: 10, paddingVertical: 5,
+              }}>
+                <Text style={{ color: colors.accent, fontWeight: "600", fontSize: 12 }}>{it}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Botones */}
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 2 }}>
+          <Pressable
+            onPress={onProfile}
+            style={{
+              flex: 1, paddingVertical: 12, borderRadius: 14,
+              borderWidth: 1, borderColor: colors.border,
+              backgroundColor: colors.bg,
+              alignItems: "center", justifyContent: "center",
+              flexDirection: "row", gap: 6,
+            }}
+          >
+            <Ionicons name="person-outline" size={16} color={colors.fg} />
+            <Text style={{ color: colors.fg, fontWeight: "700", fontSize: 14 }}>Ver perfil</Text>
+          </Pressable>
+          <Pressable
+            onPress={onChat}
+            style={{
+              flex: 2, paddingVertical: 12, borderRadius: 14,
+              backgroundColor: colors.accent,
+              alignItems: "center", justifyContent: "center",
+              flexDirection: "row", gap: 6,
+              shadowColor: colors.accent,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+            }}
+          >
+            <Ionicons name="language-outline" size={16} color="#fff" />
+            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>
+              Practicar juntos
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ─── ROW CARD (lista compacta) ────────────────────────────────────────────────
+function RowCard({ profile, colors, onChat, onProfile, saved, onSave }: {
+  profile: DiscoverProfile; colors: any;
+  onChat: () => void; onProfile: () => void;
+  saved: boolean; onSave: () => void;
+}) {
+  const learningItems: { lang: string; level?: string }[] = Array.isArray(profile.learning)
+    ? profile.learning.map((x: any) => ({ lang: x?.code ?? x?.lang ?? "", level: x?.level }))
+    : [];
+
+  return (
+    <Pressable
+      onPress={onProfile}
+      style={{
+        backgroundColor: colors.card,
+        borderRadius: 16, borderWidth: 1, borderColor: colors.border,
+        padding: 12, flexDirection: "row", gap: 12, alignItems: "center",
+      }}
+    >
+      <Avatar uri={profile.photoUrl} name={profile.name} size={52} colors={colors} />
+
+      <View style={{ flex: 1, gap: 4 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={{ color: colors.fg, fontWeight: "800", fontSize: 15 }} numberOfLines={1}>
+            {profile.name}
+          </Text>
+          {profile.isReal && (
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#34C759" }} />
+          )}
+        </View>
+
+        {/* Idiomas compactos */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+          {profile.native && (
+            <Text style={{ fontSize: 14 }}>{FLAGS[profile.native] ?? "🌍"}</Text>
+          )}
+          {profile.native && (
+            <Text style={{ color: colors.fg, opacity: 0.45, fontSize: 12, fontWeight: "500" }}>
+              {LANG_NAMES[profile.native] ?? profile.native}
+            </Text>
+          )}
+          {learningItems.length > 0 && (
+            <Text style={{ color: colors.fg, opacity: 0.25, fontSize: 12 }}>·</Text>
+          )}
+          {learningItems.slice(0, 2).map((l, i) => l.lang ? (
+            <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+              <Text style={{ fontSize: 13 }}>{FLAGS[l.lang] ?? "🌍"}</Text>
+              {l.level ? (
+                <Text style={{
+                  color: colors.accent, fontWeight: "700",
+                  fontSize: 11,
+                  backgroundColor: colors.accentSoft,
+                  paddingHorizontal: 5, paddingVertical: 1,
+                  borderRadius: 6,
+                }}>
+                  {l.level}
+                </Text>
+              ) : null}
+            </View>
+          ) : null)}
+        </View>
+
+        {/* Intereses */}
+        {(profile.interests ?? []).length > 0 && (
+          <Text style={{ color: colors.fg, opacity: 0.35, fontSize: 12, fontWeight: "500" }} numberOfLines={1}>
+            {(profile.interests ?? []).slice(0, 3).join("  ·  ")}
+          </Text>
+        )}
+      </View>
+
+      {/* Acciones */}
+      <View style={{ alignItems: "center", gap: 8 }}>
+        <Pressable onPress={onChat} style={{
+          backgroundColor: colors.accent,
+          borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
+          flexDirection: "row", alignItems: "center", gap: 5,
+        }}>
+          <Ionicons name="chatbubble-ellipses" size={13} color="#fff" />
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>Practicar</Text>
+        </Pressable>
+        <Pressable onPress={onSave}>
+          <Ionicons
+            name={saved ? "bookmark" : "bookmark-outline"}
+            size={18}
+            color={saved ? colors.accent : colors.fg}
+            style={{ opacity: saved ? 1 : 0.3 }}
+          />
+        </Pressable>
+      </View>
+    </Pressable>
+  );
+}
+
+// ─── FILTER PILL ──────────────────────────────────────────────────────────────
+function FilterPill({ lang, active, onPress, colors }: {
+  lang: string | null; active: boolean; onPress: () => void; colors: any;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        flexDirection: "row", alignItems: "center", gap: 5,
+        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 99,
+        borderWidth: 1,
+        borderColor: active ? colors.accent : colors.border,
+        backgroundColor: active ? colors.accentSoft : colors.card,
+      }}
+    >
+      {lang ? (
+        <>
+          <Text style={{ fontSize: 14 }}>{FLAGS[lang] ?? "🌍"}</Text>
+          <Text style={{
+            color: active ? colors.accent : colors.fg,
+            fontWeight: "700", fontSize: 13,
+          }}>
+            {LANG_NAMES[lang] ?? lang.toUpperCase()}
+          </Text>
+        </>
+      ) : (
+        <Text style={{
+          color: active ? colors.accent : colors.fg,
+          fontWeight: "700", fontSize: 13,
+        }}>
+          Todos
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+// ─── HOME ─────────────────────────────────────────────────────────────────────
 export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useThemeMode();
-  const [query, setQuery] = useState("");
-  const [onlyTop, setOnlyTop] = useState(true);
   const [myProfile, setMyProfile] = useState<any>(null);
   const [remoteProfiles, setRemoteProfiles] = useState<DiscoverProfile[]>([]);
   const [loadingRemote, setLoadingRemote] = useState(false);
+  const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [filterLang, setFilterLang] = useState<string | null>(null);
 
   useFocusEffect(useCallback(() => {
     getProfile().then(setMyProfile);
-    // Cargar perfiles reales de Supabase
     setLoadingRemote(true);
     getDiscoveryProfiles(30)
       .then((data) => setRemoteProfiles(data.map(normalizeRemote)))
@@ -88,223 +464,197 @@ export default function HomeScreen() {
   }, []));
 
   const me = useMemo(() => {
-    if (myProfile) {
-      const learningLangs = (myProfile.languageLearning?.learn ?? []).map((x: any) => x.lang);
-      return {
-        interests: myProfile.interests ?? [],
-        nativeLang: myProfile.nativeLang,
-        learning: learningLangs,
-        goalLanguage: learningLangs[0] ?? "EN",
-      };
-    }
-    return { interests: ["Fitness", "Trading", "Tech", "Music", "Travel", "Movies"], goalLanguage: "EN" };
+    if (!myProfile) return { interests: [], goalLanguage: "EN" };
+    const learningLangs = (myProfile.languageLearning?.learn ?? []).map((x: any) => x.lang);
+    return {
+      interests: myProfile.interests ?? [],
+      nativeLang: myProfile.nativeLang,
+      learning: learningLangs,
+      goalLanguage: learningLangs[0] ?? "EN",
+    };
   }, [myProfile]);
 
-  const scored = useMemo(() => {
-    // Combinar perfiles reales (primero) + mocks de bots
-    const mockBase = (PROFILES as AnyProfile[]).map(normalizeProfile);
+  const allProfiles = useMemo(() => {
+    const mockBase = (PROFILES as any[]).map(normalizeProfile);
     const all = [...remoteProfiles, ...mockBase];
-    const list = all.map((p) => ({ ...p, score: calculateCompatibility(me, p as any) }));
-    const q = query.trim().toLowerCase();
-    const filtered = q.length === 0 ? list : list.filter((p) => {
-      return (
-        (p.name ?? "").toLowerCase().includes(q) ||
-        (p.country ?? "").toLowerCase().includes(q) ||
-        (p.interests ?? []).some((x: string) => x.toLowerCase().includes(q))
-      );
-    });
-    filtered.sort((a, b) => {
-      // Perfiles reales primero, luego por score
-      if (a.isReal && !b.isReal) return -1;
-      if (!a.isReal && b.isReal) return 1;
-      return (b.score ?? 0) - (a.score ?? 0);
-    });
-    return onlyTop ? filtered.slice(0, 12) : filtered;
-  }, [query, onlyTop, me, remoteProfiles]);
+    return all
+      .map((p) => ({ ...p, score: calculateCompatibility(me, p as any) }))
+      .sort((a, b) => {
+        if (a.isReal && !b.isReal) return -1;
+        if (!a.isReal && b.isReal) return 1;
+        return (b.score ?? 0) - (a.score ?? 0);
+      });
+  }, [me, remoteProfiles]);
 
-  const top3 = scored.slice(0, 3);
+  const filtered = useMemo(() => {
+    if (!filterLang) return allProfiles;
+    return allProfiles.filter(
+      (p) =>
+        p.native === filterLang ||
+        (p.learningLangs ?? []).includes(filterLang)
+    );
+  }, [allProfiles, filterLang]);
+
+  const featured = filtered[0];
+  const rest = filtered.slice(1);
+
+  function toggleSave(id: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSavedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  const firstName = myProfile?.displayName?.split(" ")[0];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
+
+      {/* ── HEADER ── */}
       <View style={{
         paddingTop: Platform.OS === "ios" ? 54 : 22,
-        paddingHorizontal: 16, paddingBottom: 12,
+        paddingHorizontal: 20, paddingBottom: 14,
         borderBottomWidth: 1, borderBottomColor: colors.border,
       }}>
-        <Text style={{ color: colors.fg, fontSize: 28, fontWeight: "900" }}>
-          {myProfile?.displayName ? `Hola, ${myProfile.displayName.split(" ")[0]} 👋` : "Descubrí gente"}
-        </Text>
-        <Text style={{ color: colors.fg, opacity: 0.75, marginTop: 4 }}>
-          {loadingRemote ? "Cargando perfiles..." : `${remoteProfiles.length} usuarios reales · ordenado por compatibilidad`}
-        </Text>
-
-        <View style={{ marginTop: 12, flexDirection: "row", gap: 10 }}>
-          <View style={{ flex: 1 }}>
-            <TextInput
-              value={query} onChangeText={setQuery}
-              placeholder="Buscar por nombre, país o interés…"
-              placeholderTextColor={colors.fg + "88"}
-              style={{
-                color: colors.fg, backgroundColor: colors.card,
-                borderWidth: 1, borderColor: colors.border,
-                borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, fontWeight: "700",
-              }}
-            />
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <View>
+            <Text style={{ color: colors.fg, fontSize: 26, fontWeight: "900" }}>
+              {firstName ? `Hola, ${firstName} 👋` : "Descubrí gente"}
+            </Text>
+            <Text style={{ color: colors.fg, opacity: 0.38, fontSize: 13, fontWeight: "500", marginTop: 2 }}>
+              {loadingRemote
+                ? "Buscando personas..."
+                : `${allProfiles.length} personas para practicar`}
+            </Text>
           </View>
-          <Pressable
-            onPress={() => setOnlyTop((v) => !v)}
-            style={{
-              paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14,
-              borderWidth: 1, borderColor: colors.border,
-              backgroundColor: onlyTop ? colors.accentSoft : colors.card,
-              alignItems: "center", justifyContent: "center",
-            }}
-          >
-            <Text style={{ color: colors.fg, fontWeight: "900" }}>{onlyTop ? "Top" : "All"}</Text>
-          </Pressable>
+
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 2 }}>
+            <Pressable
+              onPress={() => router.push("/(tabs)/chats")}
+              style={{
+                width: 38, height: 38, borderRadius: 19,
+                backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+                alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <Ionicons name="chatbubble-outline" size={18} color={colors.fg} />
+            </Pressable>
+            <Pressable
+              onPress={() => router.push("/(tabs)/matches")}
+              style={{
+                width: 38, height: 38, borderRadius: 19,
+                backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+                alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <Ionicons name="people-outline" size={18} color={colors.fg} />
+            </Pressable>
+          </View>
         </View>
 
-        <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-          <Pressable
-            onPress={() => router.push("/(tabs)/matches")}
-            style={{ flex: 1, backgroundColor: colors.accent, paddingVertical: 12, borderRadius: 16, alignItems: "center" }}
-          >
-            <Text style={{ color: "white", fontWeight: "900" }}>Ver matches</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push("/(tabs)/chats")}
-            style={{ flex: 1, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingVertical: 12, borderRadius: 16, alignItems: "center" }}
-          >
-            <Text style={{ color: colors.fg, fontWeight: "900" }}>Mis chats</Text>
-          </Pressable>
-        </View>
+        {/* Filtros por idioma */}
+        <ScrollView
+          horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, paddingTop: 14, paddingRight: 4 }}
+        >
+          <FilterPill lang={null} active={filterLang === null} onPress={() => setFilterLang(null)} colors={colors} />
+          {LANG_CODES.map((lang) => (
+            <FilterPill
+              key={lang} lang={lang}
+              active={filterLang === lang}
+              onPress={() => setFilterLang(filterLang === lang ? null : lang)}
+              colors={colors}
+            />
+          ))}
+        </ScrollView>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      {/* ── CONTENIDO ── */}
+      <ScrollView
+        contentContainerStyle={{ paddingTop: 20, paddingBottom: 60, gap: 20 }}
+        showsVerticalScrollIndicator={false}
+      >
         {loadingRemote && (
-          <View style={{ alignItems: "center", paddingVertical: 20 }}>
+          <View style={{ alignItems: "center", paddingVertical: 16 }}>
             <ActivityIndicator color={colors.accent} />
           </View>
         )}
 
-        <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 18 }}>Top picks para vos</Text>
-        <Text style={{ color: colors.fg, opacity: 0.7, marginTop: 4 }}>
-          Los 3 perfiles más compatibles ahora mismo.
-        </Text>
-
-        <View style={{ marginTop: 12, gap: 12 }}>
-          {top3.map((p, i) => (
-            <ProfileCard
-              key={p.id} p={p} colors={colors} isTop={i === 0}
-              onOpen={() => router.push(`/(tabs)/chat/${p.id}` as any)}
-              onProfile={() => router.push(`/(tabs)/profile/${p.id}` as any)}
-            />
-          ))}
-        </View>
-
-        <View style={{ marginTop: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 18 }}>Más perfiles</Text>
-          <Text style={{ color: colors.fg, opacity: 0.65, fontWeight: "800" }}>{scored.length} resultados</Text>
-        </View>
-
-        <View style={{ marginTop: 12, gap: 12 }}>
-          {scored.slice(3).map((p) => (
-            <ProfileCard
-              key={p.id} p={p} colors={colors}
-              onOpen={() => router.push(`/(tabs)/chat/${p.id}` as any)}
-              onProfile={() => router.push(`/(tabs)/profile/${p.id}` as any)}
-            />
-          ))}
-        </View>
-      </ScrollView>
-    </View>
-  );
-}
-
-function ProfileCard({ p, colors, isTop, onOpen, onProfile }: {
-  p: DiscoverProfile; colors: any; isTop?: boolean;
-  onOpen: () => void; onProfile: () => void;
-}) {
-  const score = typeof p.score === "number" ? p.score : 0;
-  const scorePct = Math.max(0, Math.min(100, Math.round(score * 100)));
-  const scoreColor = scorePct >= 60 ? "#22c55e" : scorePct >= 35 ? colors.accent : colors.fg;
-  const initials = (p.name ?? "?").slice(0, 2).toUpperCase();
-
-  return (
-    <View style={{
-      backgroundColor: colors.card, borderWidth: 1,
-      borderColor: isTop ? colors.accent + "66" : colors.border,
-      borderRadius: 18, padding: 14,
-    }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <View style={{ flexDirection: "row", gap: 10, flex: 1, marginRight: 8 }}>
-          {/* Avatar */}
-          {p.photoUrl ? (
-            <Image source={{ uri: p.photoUrl }} style={{ width: 44, height: 44, borderRadius: 22 }} />
-          ) : (
-            <View style={{
-              width: 44, height: 44, borderRadius: 22,
-              backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent + "44",
-              alignItems: "center", justifyContent: "center",
-            }}>
-              <Text style={{ color: colors.accent, fontWeight: "900", fontSize: 16 }}>{initials}</Text>
-            </View>
-          )}
-          <View style={{ gap: 2, flexShrink: 1, flex: 1 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 18 }}>
-                {p.name} {p.country ? `• ${p.country}` : ""}
+        {/* Featured */}
+        {featured && (
+          <View style={{ gap: 10 }}>
+            <View style={{ paddingHorizontal: 20, flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{
+                width: 6, height: 6, borderRadius: 3,
+                backgroundColor: colors.accent,
+              }} />
+              <Text style={{
+                color: colors.fg, opacity: 0.4, fontWeight: "700",
+                fontSize: 11, letterSpacing: 1.2,
+              }}>
+                MEJOR COMPATIBILIDAD
               </Text>
-              {isTop && (
-                <View style={{ backgroundColor: "#FFD700", borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 }}>
-                  <Text style={{ color: "#000", fontSize: 10, fontWeight: "900" }}>✦ TOP</Text>
-                </View>
-              )}
-              {p.isReal && (
-                <View style={{ backgroundColor: "#22c55e22", borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 }}>
-                  <Text style={{ color: "#22c55e", fontSize: 10, fontWeight: "900" }}>● REAL</Text>
-                </View>
-              )}
             </View>
-            <Text style={{ color: colors.fg, opacity: 0.75, fontWeight: "700" }}>
-              Native: {p.native ?? "—"} • Learning: {p.learningLabel ?? "—"}
+            <FeaturedCard
+              profile={featured}
+              colors={colors}
+              saved={savedIds.includes(featured.id)}
+              onSave={() => toggleSave(featured.id)}
+              onChat={() => router.push(`/(tabs)/chat/${featured.id}` as any)}
+              onProfile={() => router.push(`/(tabs)/profile/${featured.id}` as any)}
+            />
+          </View>
+        )}
+
+        {/* Lista resto */}
+        {rest.length > 0 && (
+          <View style={{ gap: 10 }}>
+            <View style={{ paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={{
+                  width: 6, height: 6, borderRadius: 3,
+                  backgroundColor: colors.border,
+                }} />
+                <Text style={{
+                  color: colors.fg, opacity: 0.4, fontWeight: "700",
+                  fontSize: 11, letterSpacing: 1.2,
+                }}>
+                  MÁS PERSONAS
+                </Text>
+              </View>
+              <Text style={{ color: colors.fg, opacity: 0.25, fontWeight: "600", fontSize: 12 }}>
+                {rest.length} resultados
+              </Text>
+            </View>
+
+            <View style={{ paddingHorizontal: 16, gap: 8 }}>
+              {rest.map((p) => (
+                <RowCard
+                  key={p.id}
+                  profile={p}
+                  colors={colors}
+                  saved={savedIds.includes(p.id)}
+                  onSave={() => toggleSave(p.id)}
+                  onChat={() => router.push(`/(tabs)/chat/${p.id}` as any)}
+                  onProfile={() => router.push(`/(tabs)/profile/${p.id}` as any)}
+                />
+              ))}
+            </View>
+          </View>
+        )}
+
+        {filtered.length === 0 && !loadingRemote && (
+          <View style={{ alignItems: "center", paddingVertical: 60, gap: 12 }}>
+            <Ionicons name="search-outline" size={44} color={colors.fg} style={{ opacity: 0.15 }} />
+            <Text style={{ color: colors.fg, opacity: 0.35, fontWeight: "600", fontSize: 15 }}>
+              No hay perfiles para este idioma
             </Text>
+            <Pressable onPress={() => setFilterLang(null)}>
+              <Text style={{ color: colors.accent, fontWeight: "700" }}>Ver todos</Text>
+            </Pressable>
           </View>
-        </View>
-        <View style={{ alignItems: "flex-end" }}>
-          <Text style={{ color: scoreColor, fontWeight: "900" }}>{scorePct}%</Text>
-          <Text style={{ color: colors.fg, opacity: 0.6, fontWeight: "800" }}>match</Text>
-        </View>
-      </View>
-
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-        {(p.interests ?? []).slice(0, 6).map((it: string) => (
-          <View key={it} style={{
-            paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999,
-            backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
-          }}>
-            <Text style={{ color: colors.fg, fontWeight: "800", opacity: 0.9 }}>{it}</Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
-        <Pressable
-          onPress={onProfile}
-          style={{
-            paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14,
-            backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, alignItems: "center",
-          }}
-        >
-          <Text style={{ color: colors.fg, fontWeight: "900" }}>Ver perfil</Text>
-        </Pressable>
-        <Pressable
-          onPress={onOpen}
-          style={{ flex: 1, backgroundColor: colors.accent, paddingVertical: 12, borderRadius: 14, alignItems: "center" }}
-        >
-          <Text style={{ color: "white", fontWeight: "900" }}>Abrir chat</Text>
-        </Pressable>
-      </View>
+        )}
+      </ScrollView>
     </View>
   );
 }

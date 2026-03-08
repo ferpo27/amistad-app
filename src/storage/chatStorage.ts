@@ -3,6 +3,7 @@
 import { supabase } from "../lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { ChatMessage } from "../storage";
+import { sendPushToUser } from "../notifications";
 
 export const BOT_IDS = ["anna_de", "hiro_ja", "li_zh", "ivan_ru", "masha_ru"];
 export const isBot = (id: string) => BOT_IDS.includes(id);
@@ -37,6 +38,17 @@ async function appendChatLocal(
 async function getMyUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data?.session?.user?.id ?? null;
+}
+
+async function getMyDisplayName(): Promise<string> {
+  const myId = await getMyUserId();
+  if (!myId) return "Alguien";
+  const { data } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", myId)
+    .single();
+  return data?.display_name ?? "Alguien";
 }
 
 async function getChatRemote(conversationId: string): Promise<ChatMessage[]> {
@@ -86,6 +98,12 @@ async function appendChatRemote(
     return null;
   }
 
+  // Enviar notificación push al receptor
+  if (receiverId) {
+    const senderName = await getMyDisplayName();
+    sendPushToUser(receiverId, senderName, msg.text, conversationId).catch(() => {});
+  }
+
   return { id: data.id, ts: data.ts, from: "me", text: data.text };
 }
 
@@ -126,7 +144,6 @@ export function subscribeToChatRealtime(
       async (payload) => {
         const row = payload.new as any;
         const myId = await getMyUserId();
-        // Solo mostrar mensajes del otro — los míos ya los agrego localmente
         if (row.sender_id !== myId) {
           onNewMessage({ id: row.id, ts: row.ts, from: "them", text: row.text });
         }

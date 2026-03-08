@@ -2,41 +2,39 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, Pressable, TextInput, FlatList,
-  KeyboardAvoidingView, Platform, Modal, ActivityIndicator, ScrollView,
+  KeyboardAvoidingView, Platform, Modal, ActivityIndicator, ScrollView, Animated,
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useThemeMode } from "../../../src/theme";
 import { MATCHES } from "../../../src/mock/matches";
 import { getProfile, getChat, appendChat, getAppLanguage, type ChatMessage } from "../../../src/storage";
 import { subscribeToChatRealtime, isBot } from "../../../src/storage/chatStorage";
-import { generateConversationStarters } from "../../../src/conversation/connectionEngine";
-import { blockUser, reportUser, type ReportReason } from "../../../src/safety";
 import { getBotReply } from "../../../src/bots/botReply";
-import { getCulturalTip } from "../../../src/culture/culturalTips";
 import { translateCached, translateWordInContextCached } from "../../../src/translate/autoTranslate";
 import type { LanguageCode } from "../../../src/translate/types";
-import { translatorHealth, getTranslatorBaseUrl } from "../../../src/translate/apiClient";
+import { translatorHealth } from "../../../src/translate/apiClient";
+import { blockUser, reportUser, type ReportReason } from "../../../src/safety";
+import * as Haptics from "expo-haptics";
+import { useAudioRecorder, useAudioPlayer } from "../../../src/hooks/useAudioRecorder";
 
 type MatchProfile = (typeof MATCHES)[number];
 type WordToken = { token: string; index: number };
+type Reaction = { emoji: string; count: number; mine: boolean };
+type ReplyInfo = { id: string; text: string; from: "me" | "them" };
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-// CJK tokenizer — cada kanji/hanzi es su propia palabra para traducir
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 const RE_CJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/u;
 
 function splitCJK(text: string): string[] {
   const out: string[] = [];
   for (const ch of text) {
-    if (RE_CJK.test(ch)) out.push(ch);       // cada kanji = 1 token
+    if (RE_CJK.test(ch)) out.push(ch);
     else if (/[。！？!?…、,\s]/.test(ch)) out.push(ch);
     else {
-      // letras latinas juntas (nombres propios dentro del texto)
-      if (out.length && !RE_CJK.test(out[out.length - 1]) && !/[。！？!?…、,\s]/.test(out[out.length - 1])) {
+      if (out.length && !RE_CJK.test(out[out.length - 1]) && !/[。！？!?…、,\s]/.test(out[out.length - 1]))
         out[out.length - 1] += ch;
-      } else {
-        out.push(ch);
-      }
+      else out.push(ch);
     }
   }
   return out.filter(Boolean);
@@ -44,11 +42,13 @@ function splitCJK(text: string): string[] {
 
 function tokenizeWords(text: string): string[] {
   if (RE_CJK.test(text)) return splitCJK(text);
-  return text.split(/(\s+|[,.!?;:()¿¡"""\'\'-])/g).filter((t) => t !== "" && t !== undefined);
+  return text.split(/(\s+|[,.!?;:()¿¡"""\'\''-])/g).filter((t) => t !== "" && t !== undefined);
 }
+
 function isOnlyPunctOrSpace(t: string): boolean {
-  return !!t.match(/^\s+$/) || !!t.match(/^[,.!?;:()¿¡"""\'\'\-。！？…、]+$/);
+  return !!t.match(/^\s+$/) || !!t.match(/^[,.!?;:()¿¡"""\'\''\-。！？…、]+$/);
 }
+
 function normalizeUiLang(lang: string | undefined | null): LanguageCode {
   const two = (lang ?? "es").toLowerCase().slice(0, 2);
   if (two === "es") return "es"; if (two === "en") return "en";
@@ -56,6 +56,7 @@ function normalizeUiLang(lang: string | undefined | null): LanguageCode {
   if (two === "ru") return "ru"; if (two === "zh") return "zh";
   return "es";
 }
+
 function splitSegments(text: string): string[] {
   const t = text.trim();
   if (!t) return [];
@@ -63,52 +64,17 @@ function splitSegments(text: string): string[] {
   return m ? m.map((s) => s.trim()).filter(Boolean) : [t];
 }
 
-// ─── Icebreakers bilingüe: texto en idioma del match + traducción en español ──
-type StarterItem = { id: string; textNative: string; textEs: string };
+const QUICK_REACTIONS = ["❤️", "😂", "👍", "😮", "😢", "🔥"];
 
-function starterTemplatesNative(nativeLang: LanguageCode, name: string, country: string): { native: string; es: string }[] {
-  switch (nativeLang) {
-    case "de": return [
-      { native: `Hi ${name}! Was magst du am meisten an ${country}?`, es: `¡Hola ${name}! ¿Qué es lo que más te gusta de ${country}?` },
-      { native: `Welche Gerichte aus ${country} empfiehlst du?`, es: `¿Qué comidas de ${country} recomendás?` },
-      { native: `Was sind deine Hobbys?`, es: `¿Cuáles son tus hobbies?` },
-    ];
-    case "ru": return [
-      { native: `Привет, ${name}! Что тебе нравится в ${country}?`, es: `¡Hola ${name}! ¿Qué te gusta de ${country}?` },
-      { native: `Какую еду в ${country} посоветуешь?`, es: `¿Qué comida de ${country} recomendás?` },
-      { native: `Какие у тебя хобби?`, es: `¿Cuáles son tus hobbies?` },
-    ];
-    case "ja": return [
-      { native: `こんにちは、${name}！${country}で好きなところは？`, es: `¡Hola ${name}! ¿Qué parte de ${country} te gusta más?` },
-      { native: `${country}のおすすめ食べ物は？`, es: `¿Qué comida de ${country} recomendás?` },
-      { native: `趣味は何ですか？`, es: `¿Cuáles son tus hobbies?` },
-    ];
-    case "zh": return [
-      { native: `你好，${name}！你最喜欢${country}的什么？`, es: `¡Hola ${name}! ¿Qué es lo que más te gusta de ${country}?` },
-      { native: `你推荐${country}的美食是什么？`, es: `¿Qué comida de ${country} recomendás?` },
-      { native: `你有什么爱好？`, es: `¿Cuáles son tus hobbies?` },
-    ];
-    case "en": return [
-      { native: `Hey ${name}! What do you like most about ${country}?`, es: `¿Qué es lo que más te gusta de ${country}?` },
-      { native: `What food from ${country} should I try?`, es: `¿Qué comida de ${country} debería probar?` },
-      { native: `What are your hobbies?`, es: `¿Cuáles son tus hobbies?` },
-    ];
-    default: return [
-      { native: `¡Hola ${name}! ¿Qué te gusta de vivir en ${country}?`, es: `¿Qué te gusta de vivir en ${country}?` },
-      { native: `¿Qué comida de ${country} recomendás?`, es: `¿Qué comida recomendás?` },
-      { native: `¿Qué hobbies tenés?`, es: `¿Qué hobbies tenés?` },
-    ];
-  }
-}
-
-// ─── Screen ─────────────────────────────────────────────────────────────────
-
+// ─── Screen ──────────────────────────────────────────────────────────────────
 export default function ChatScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const matchId = String(params?.id ?? "");
   const { colors } = useThemeMode();
   const listRef = useRef<FlatList<ChatMessage>>(null);
+  const recordAnim = useRef(new Animated.Value(1)).current;
+  const recordLoop = useRef<Animated.CompositeAnimation | null>(null);
 
   const match = useMemo<MatchProfile | null>(() => {
     const m = (MATCHES as any[]).find((x) => String(x.id) === matchId);
@@ -119,10 +85,12 @@ export default function ChatScreen() {
   const [msgs, setMsgs] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [botTyping, setBotTyping] = useState(false);
-  const [openSafety, setOpenSafety] = useState(false);
-  const [reportNote, setReportNote] = useState("");
-  const [showStarters, setShowStarters] = useState(true);
   const [uiLang, setUiLang] = useState<LanguageCode>("es");
+  const [showStarters, setShowStarters] = useState(true);
+  const [translatorOk, setTranslatorOk] = useState<boolean | null>(null);
+  const [replyTo, setReplyTo] = useState<ReplyInfo | null>(null);
+  const [reactions, setReactions] = useState<Record<string, Reaction[]>>({});
+  const [contextMenu, setContextMenu] = useState<{ msgId: string; text: string; from: "me" | "them" } | null>(null);
   const [openWord, setOpenWord] = useState(false);
   const [activeSentence, setActiveSentence] = useState("");
   const [activeSourceLang, setActiveSourceLang] = useState<LanguageCode>("en");
@@ -134,125 +102,96 @@ export default function ChatScreen() {
   const [sentenceMeaning, setSentenceMeaning] = useState("");
   const [sentenceLoading, setSentenceLoading] = useState(false);
   const [tokenMeanings, setTokenMeanings] = useState<Record<number, string>>({});
-  const [translatorOk, setTranslatorOk] = useState<boolean | null>(null);
-  const [translatorErr, setTranslatorErr] = useState("");
+  const [openSafety, setOpenSafety] = useState(false);
+  const [reportNote, setReportNote] = useState("");
+
+  // Audio — toque simple para iniciar, segundo toque para enviar
+  const { isRecording, recordSeconds, startRecording, stopRecording, cancelRecording } = useAudioRecorder();
+  const { playingUri, progress: audioProgress, play: playAudio } = useAudioPlayer();
 
   const botLang: LanguageCode = (match?.nativeLang ?? "en") as LanguageCode;
+  const LANG_NAME: Record<LanguageCode, string> = { es: "ES", en: "EN", de: "DE", ja: "JA", ru: "RU", zh: "ZH" };
 
-  // Icebreakers contextuales: cambian según el historial de conversación
-  const starters = useMemo<StarterItem[]>(() => {
+  // ── Icebreakers ──────────────────────────────────────────────────────────
+  const starters = useMemo(() => {
     const name = match?.name ?? "friend";
     const country = match?.country ?? "";
     const lang = botLang;
-    const all: StarterItem[] = [];
-
-    // ── Sin mensajes: saludo inicial ────────────────────────────────────────
+    type S = { id: string; textNative: string; textEs: string };
+    const all: S[] = [];
     if (msgs.length === 0) {
-      const greetings: Record<LanguageCode, { native: string; es: string }[]> = {
+      const g: Record<LanguageCode, { native: string; es: string }[]> = {
         de: [
-          { native: `Hallo ${name}! Wie geht's dir heute? 😊`, es: `¡Hola ${name}! ¿Cómo estás hoy?` },
-          { native: `Hi ${name}! Ich lerne gerade Deutsch — kannst du mir helfen?`, es: `¡Hola! Estoy aprendiendo alemán, ¿me ayudás?` },
-          { native: `Hey ${name}! Was machst du so gerne in ${country}?`, es: `¿Qué te gusta hacer en ${country}?` },
+          { native: `Hallo ${name}! Wie geht's dir heute?`, es: `¡Hola! ¿Cómo estás?` },
+          { native: `Ich lerne Deutsch — kannst du mir helfen?`, es: `Aprendiendo alemán, ¿me ayudás?` },
+          { native: `Was magst du am meisten an ${country}?`, es: `¿Qué te gusta de ${country}?` },
         ],
         ru: [
-          { native: `Привет, ${name}! Как дела? 😊`, es: `¡Hola ${name}! ¿Cómo estás?` },
-          { native: `Привет! Я изучаю русский — поможешь мне?`, es: `¡Hola! Estoy aprendiendo ruso, ¿me ayudás?` },
-          { native: `Привет, ${name}! Что любишь делать в ${country}?`, es: `¿Qué te gusta hacer en ${country}?` },
+          { native: `Привет, ${name}! Как дела?`, es: `¡Hola! ¿Cómo estás?` },
+          { native: `Я изучаю русский — поможешь?`, es: `Aprendiendo ruso, ¿me ayudás?` },
+          { native: `Что любишь делать в ${country}?`, es: `¿Qué hacés en ${country}?` },
         ],
         ja: [
-          { native: `こんにちは、${name}！今日はどうですか？😊`, es: `¡Hola ${name}! ¿Cómo estás hoy?` },
-          { native: `はじめまして！日本語を勉強しています。助けてもらえますか？`, es: `¡Mucho gusto! Estoy estudiando japonés, ¿me ayudás?` },
-          { native: `${country}で好きなことは何ですか？`, es: `¿Qué te gusta hacer en ${country}?` },
+          { native: `こんにちは、${name}！`, es: `¡Hola!` },
+          { native: `日本語を勉強しています。助けてもらえますか？`, es: `Estudio japonés, ¿me ayudás?` },
+          { native: `${country}で好きなことは？`, es: `¿Qué te gusta en ${country}?` },
         ],
         zh: [
-          { native: `你好，${name}！你今天怎么样？😊`, es: `¡Hola ${name}! ¿Cómo estás hoy?` },
-          { native: `你好！我在学中文，你能帮我吗？`, es: `¡Hola! Estoy aprendiendo chino, ¿me ayudás?` },
-          { native: `你在${country}最喜欢做什么？`, es: `¿Qué te gusta hacer en ${country}?` },
+          { native: `你好，${name}！`, es: `¡Hola!` },
+          { native: `我在学中文，你能帮我吗？`, es: `Aprendiendo chino, ¿me ayudás?` },
+          { native: `你在${country}最喜欢做什么？`, es: `¿Qué te gusta en ${country}?` },
         ],
         en: [
-          { native: `Hey ${name}! How's it going? 😊`, es: `¡Hola ${name}! ¿Cómo andás?` },
-          { native: `Hi! I'm learning English — can you help me practice?`, es: `¡Hola! Estoy aprendiendo inglés, ¿practicamos?` },
-          { native: `What do you enjoy doing in ${country}?`, es: `¿Qué te gusta hacer en ${country}?` },
+          { native: `Hey ${name}! How's it going?`, es: `¡Hola! ¿Cómo andás?` },
+          { native: `I'm learning English — can you help me practice?`, es: `Aprendiendo inglés.` },
+          { native: `What do you enjoy doing in ${country}?`, es: `¿Qué hacés en ${country}?` },
         ],
         es: [
-          { native: `¡Hola ${name}! ¿Cómo andás? 😊`, es: `¡Hola ${name}! ¿Cómo estás?` },
-          { native: `¡Hola! Estoy aprendiendo español, ¿me ayudás?`, es: `¡Hola! Estoy aprendiendo español.` },
-          { native: `¿Qué te gusta hacer en ${country}?`, es: `¿Qué te gusta hacer en ${country}?` },
+          { native: `¡Hola ${name}! ¿Cómo andás?`, es: `¡Hola!` },
+          { native: `Estoy aprendiendo español, ¿me ayudás?`, es: `Aprendiendo español.` },
+          { native: `¿Qué te gusta hacer en ${country}?`, es: `¿Qué hacés en ${country}?` },
         ],
       };
-      const opts = greetings[lang] ?? greetings.en;
-      opts.forEach((t, i) => all.push({ id: `greet${i}`, textNative: t.native, textEs: t.es }));
-    }
-
-    // ── Con mensajes: sugerir respuestas basadas en el último mensaje del bot ─
-    else {
-      const lastBotMsg = [...msgs].reverse().find((m) => m.from === "them");
-      const lastUserMsg = [...msgs].reverse().find((m) => m.from === "me");
-      const lastText = lastBotMsg?.text ?? "";
-      const myInterests = meProfile?.interests ?? [];
-      const common = (match?.interests ?? []).filter((i) => myInterests.includes(i));
-
-      // Respuestas de continuación según idioma
-      const continuations: Record<LanguageCode, { native: string; es: string }[]> = {
+      (g[lang] ?? g.en).forEach((t, i) => all.push({ id: `g${i}`, textNative: t.native, textEs: t.es }));
+    } else {
+      const c: Record<LanguageCode, { native: string; es: string }[]> = {
         de: [
-          { native: `Das ist sehr interessant! Erzähl mir mehr.`, es: `¡Qué interesante! Contame más.` },
-          { native: `Wirklich? Das wusste ich nicht!`, es: `¿En serio? ¡No lo sabía!` },
-          { native: `Wie lange wohnst du schon in ${country}?`, es: `¿Hace cuánto vivís en ${country}?` },
+          { native: `Das ist sehr interessant! Erzähl mir mehr.`, es: `Interesante, contame más.` },
+          { native: `Wirklich? Das wusste ich nicht!`, es: `¿En serio?` },
+          { native: `Wie lange wohnst du schon in ${country}?`, es: `¿Cuánto vivís en ${country}?` },
         ],
         ru: [
-          { native: `Это очень интересно! Расскажи подробнее.`, es: `¡Qué interesante! Contame más.` },
-          { native: `Правда? Я не знал(а)!`, es: `¿En serio? ¡No lo sabía!` },
-          { native: `Как давно ты живёшь в ${country}?`, es: `¿Hace cuánto vivís en ${country}?` },
+          { native: `Очень интересно! Расскажи подробнее.`, es: `Interesante.` },
+          { native: `Правда? Я не знал(а)!`, es: `¿En serio?` },
+          { native: `Как давно живёшь в ${country}?`, es: `¿Cuánto en ${country}?` },
         ],
         ja: [
-          { native: `それはとても面白いですね！もっと教えてください。`, es: `¡Qué interesante! Contame más.` },
-          { native: `本当ですか？知りませんでした！`, es: `¿En serio? ¡No lo sabía!` },
-          { native: `${country}にはどのくらい住んでいますか？`, es: `¿Hace cuánto vivís en ${country}?` },
+          { native: `それはとても面白いですね！`, es: `Interesante.` },
+          { native: `本当ですか？知りませんでした！`, es: `¿En serio?` },
+          { native: `${country}にはどのくらい住んでいますか？`, es: `¿Cuánto en ${country}?` },
         ],
         zh: [
-          { native: `这真的很有趣！请告诉我更多。`, es: `¡Qué interesante! Contame más.` },
-          { native: `真的吗？我不知道！`, es: `¿En serio? ¡No lo sabía!` },
-          { native: `你在${country}住了多久了？`, es: `¿Hace cuánto vivís en ${country}?` },
+          { native: `这真的很有趣！请告诉我更多。`, es: `Interesante.` },
+          { native: `真的吗？我不知道！`, es: `¿En serio?` },
+          { native: `你在${country}住了多久了？`, es: `¿Cuánto en ${country}?` },
         ],
         en: [
-          { native: `That's really interesting! Tell me more.`, es: `¡Qué interesante! Contame más.` },
-          { native: `Really? I didn't know that!`, es: `¿En serio? ¡No lo sabía!` },
-          { native: `How long have you been in ${country}?`, es: `¿Hace cuánto vivís en ${country}?` },
+          { native: `That's really interesting! Tell me more.`, es: `Interesante.` },
+          { native: `Really? I didn't know that!`, es: `¿En serio?` },
+          { native: `How long have you been in ${country}?`, es: `¿Cuánto en ${country}?` },
         ],
         es: [
-          { native: `¡Qué interesante! Contame más.`, es: `¡Qué interesante! Contame más.` },
-          { native: `¿En serio? ¡No lo sabía!`, es: `¿En serio? ¡No lo sabía!` },
-          { native: `¿Hace cuánto vivís en ${country}?`, es: `¿Hace cuánto vivís en ${country}?` },
+          { native: `¡Qué interesante! Contame más.`, es: `Interesante.` },
+          { native: `¿En serio? ¡No lo sabía!`, es: `¿En serio?` },
+          { native: `¿Hace cuánto vivís en ${country}?`, es: `¿Cuánto en ${country}?` },
         ],
       };
-
-      const opts = continuations[lang] ?? continuations.en;
-      opts.forEach((t, i) => all.push({ id: `cont${i}`, textNative: t.native, textEs: t.es }));
-
-      // Si tienen intereses en común, sugerir uno
-      if (common.length > 0) {
-        const interest = common[0];
-        const interestSuggestions: Record<LanguageCode, { native: string; es: string }> = {
-          de: { native: `Ich mag auch ${interest}! Was ist dein Lieblingsaspekt davon?`, es: `¡A mí también me gusta ${interest}! ¿Qué es lo que más te gusta?` },
-          ru: { native: `Мне тоже нравится ${interest}! Что тебе в этом больше всего нравится?`, es: `¡A mí también me gusta ${interest}!` },
-          ja: { native: `私も${interest}が好きです！一番好きなところは？`, es: `¡A mí también me gusta ${interest}!` },
-          zh: { native: `我也喜欢${interest}！你最喜欢哪方面？`, es: `¡A mí también me gusta ${interest}!` },
-          en: { native: `I also love ${interest}! What do you enjoy most about it?`, es: `¡A mí también me gusta ${interest}!` },
-          es: { native: `¡A mí también me gusta ${interest}! ¿Qué es lo que más disfrutás?`, es: `¡A mí también me gusta ${interest}!` },
-        };
-        const s = interestSuggestions[lang];
-        if (s) all.push({ id: "common", textNative: s.native, textEs: s.es });
-      }
+      (c[lang] ?? c.en).forEach((t, i) => all.push({ id: `c${i}`, textNative: t.native, textEs: t.es }));
     }
+    return all.slice(0, 4);
+  }, [match, botLang, msgs]);
 
-    const seen = new Set<string>();
-    return all.filter((s) => {
-      if (seen.has(s.textNative)) return false;
-      seen.add(s.textNative);
-      return true;
-    }).slice(0, 5);
-  }, [match, meProfile, botLang, msgs]);
-
+  // ── Init ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       const my = await getProfile();
@@ -261,7 +200,6 @@ export default function ChatScreen() {
       setUiLang(normalizeUiLang(l));
       const history = await getChat(matchId);
       if (history.length === 0 && match && isBot(matchId)) {
-        // Solo bots mandan mensaje inicial automático
         setBotTyping(true);
         const opening = await getBotReply(match, [], "Hola!").catch(() => null);
         setBotTyping(false);
@@ -275,11 +213,8 @@ export default function ChatScreen() {
       }
       const ok = await translatorHealth();
       setTranslatorOk(ok);
-      setTranslatorErr(ok ? "" : `Traductor no disponible`);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 50);
     })();
-
-    // Realtime solo para usuarios reales
     const unsub = subscribeToChatRealtime(matchId, (msg) => {
       setMsgs((prev) => [...prev, msg]);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
@@ -294,6 +229,7 @@ export default function ChatScreen() {
     })();
   }, []));
 
+  // ── Enviar mensaje ────────────────────────────────────────────────────────
   async function addMessage(from: "me" | "them", messageText: string) {
     const value = messageText.trim();
     if (!value) return;
@@ -306,27 +242,89 @@ export default function ChatScreen() {
     const raw = (customText ?? text).trim();
     if (!raw || !matchId) return;
     setText("");
+    setReplyTo(null);
     setShowStarters(false);
     await addMessage("me", raw);
-    // Solo llamar al bot si el chat es con un bot, no con usuario real
     if (!match || !isBot(matchId)) return;
     setBotTyping(true);
     setTimeout(async () => {
       try {
-        const currentHistory = await getChat(matchId);
-        const reply = await getBotReply(match, currentHistory, raw);
+        const history = await getChat(matchId);
+        const reply = await getBotReply(match, history, raw);
         await addMessage("them", reply);
-        setTranslatorOk(true); setTranslatorErr("");
       } catch {
-        const fallbacks: Record<LanguageCode, string> = {
+        const fb: Record<LanguageCode, string> = {
           de: "Das ist interessant!", ja: "なるほど！", zh: "很有意思！",
-          ru: "Интересно!", en: "Interesting!", es: "¡Qué interesante!",
+          ru: "Интересно!", en: "Interesting!", es: "¡Interesante!",
         };
-        await addMessage("them", fallbacks[botLang] ?? fallbacks.en);
+        await addMessage("them", fb[botLang] ?? fb.en);
       } finally { setBotTyping(false); }
     }, 800 + Math.random() * 1200);
   }
 
+  // ── Audio — toque simple toggle ───────────────────────────────────────────
+  async function handleAudioButton() {
+    if (!isRecording) {
+      // Iniciar grabación
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      recordLoop.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(recordAnim, { toValue: 1.4, duration: 600, useNativeDriver: true }),
+          Animated.timing(recordAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        ])
+      );
+      recordLoop.current.start();
+      await startRecording();
+    } else {
+      // Detener y enviar
+      recordLoop.current?.stop();
+      recordAnim.setValue(1);
+      const audio = await stopRecording();
+      console.log("[chat] Audio resultado:", audio);
+      if (audio?.uri) {
+        const secs = Math.max(1, Math.round(audio.durationMs / 1000));
+        await onSend(`🎤__AUDIO__${audio.uri}__DURATION__${secs}s`);
+      } else {
+        console.warn("[chat] Audio no se pudo enviar — uri vacía");
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  }
+
+  async function handleCancelRecording() {
+    recordLoop.current?.stop();
+    recordAnim.setValue(1);
+    await cancelRecording();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  }
+
+  // ── Reacciones ────────────────────────────────────────────────────────────
+  function addReaction(msgId: string, emoji: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setReactions((prev) => {
+      const existing = prev[msgId] ?? [];
+      const idx = existing.findIndex((r) => r.emoji === emoji);
+      if (idx >= 0) {
+        const updated = [...existing];
+        if (updated[idx].mine) {
+          updated[idx] = { ...updated[idx], count: updated[idx].count - 1, mine: false };
+          if (updated[idx].count <= 0) updated.splice(idx, 1);
+        } else {
+          updated[idx] = { ...updated[idx], count: updated[idx].count + 1, mine: true };
+        }
+        return { ...prev, [msgId]: updated };
+      }
+      return { ...prev, [msgId]: [...existing, { emoji, count: 1, mine: true }] };
+    });
+    setContextMenu(null);
+  }
+
+  function onLongPressMsg(msgId: string, msgText: string, from: "me" | "them") {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setContextMenu({ msgId, text: msgText, from });
+  }
+
+  // ── Traductor ─────────────────────────────────────────────────────────────
   function openTranslatorSheet(sentenceText: string, tappedToken: string, from: "me" | "them") {
     const cleanToken = tappedToken.trim();
     if (!cleanToken || isOnlyPunctOrSpace(cleanToken)) return;
@@ -355,8 +353,7 @@ export default function ChatScreen() {
     setSelectedToken(wt.token);
     setSelectedIndex(wt.index);
     if (tokenMeanings[wt.index]) { setWordMeaning(tokenMeanings[wt.index]); return; }
-    setMeaningLoading(true);
-    setWordMeaning("");
+    setMeaningLoading(true); setWordMeaning("");
     try {
       let result: string | null = null;
       try {
@@ -372,9 +369,8 @@ export default function ChatScreen() {
       }
       setWordMeaning(result ?? "—");
       setTokenMeanings((p) => ({ ...p, [wt.index]: result ?? "—" }));
-    } catch {
-      setWordMeaning("No se pudo traducir.");
-    } finally { setMeaningLoading(false); }
+    } catch { setWordMeaning("No se pudo traducir."); }
+    finally { setMeaningLoading(false); }
   }
 
   async function translateWholeSentence() {
@@ -388,125 +384,104 @@ export default function ChatScreen() {
         parts.push((t ?? "").trim());
       }
       setSentenceMeaning(parts.filter(Boolean).join(" ").trim() || "—");
-    } catch {
-      setSentenceMeaning("No se pudo traducir.");
-    } finally { setSentenceLoading(false); }
+    } catch { setSentenceMeaning("No se pudo traducir."); }
+    finally { setSentenceLoading(false); }
   }
 
-  const LANG_FLAG: Record<LanguageCode, string> = { es: "🇦🇷", en: "🇺🇸", de: "🇩🇪", ja: "🇯🇵", ru: "🇷🇺", zh: "🇨🇳" };
-  const LANG_NAME: Record<LanguageCode, string> = { es: "ES", en: "EN", de: "DE", ja: "JA", ru: "RU", zh: "ZH" };
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* ── HEADER ─────────────────────────────────────────────────────── */}
+      {/* ── HEADER ── */}
       <View style={{
-        paddingTop: Platform.OS === "ios" ? 58 : 24,
-        paddingHorizontal: 16,
-        paddingBottom: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
+        paddingTop: Platform.OS === "ios" ? 56 : 24,
+        paddingHorizontal: 16, paddingBottom: 12,
+        borderBottomWidth: 1, borderBottomColor: colors.border,
         backgroundColor: colors.bg,
       }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <Pressable onPress={() => router.back()} style={{
-            width: 40, height: 40, borderRadius: 20,
-            borderWidth: 1, borderColor: colors.border,
-            backgroundColor: colors.card,
+            width: 38, height: 38, borderRadius: 19,
             alignItems: "center", justifyContent: "center",
           }}>
-            <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 18 }}>←</Text>
+            <Ionicons name="chevron-back" size={24} color={colors.fg} />
           </Pressable>
 
-          {/* Avatar circular con inicial */}
           <View style={{
-            width: 40, height: 40, borderRadius: 20,
+            width: 38, height: 38, borderRadius: 19,
             backgroundColor: colors.accent,
             alignItems: "center", justifyContent: "center",
           }}>
-            <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
               {(match?.name ?? "?")[0].toUpperCase()}
             </Text>
           </View>
 
           <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 17 }} numberOfLines={1}>
+            <Text style={{ color: colors.fg, fontWeight: "700", fontSize: 16 }} numberOfLines={1}>
               {match?.name ?? "Chat"}
-              <Text style={{ opacity: 0.45, fontSize: 13, fontWeight: "700" }}>
-                {match?.country ? `  ${match.country}` : ""}
-              </Text>
+              {match?.country ? (
+                <Text style={{ opacity: 0.4, fontSize: 13, fontWeight: "500" }}>  {match.country}</Text>
+              ) : null}
             </Text>
-            <Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "700", fontSize: 12 }}>
-              {botTyping ? "✍️ escribiendo…" : `${LANG_FLAG[botLang]} ${LANG_NAME[botLang]} · tocá una palabra para traducir`}
+            <Text style={{ color: colors.fg, opacity: 0.4, fontSize: 11, fontWeight: "500" }}>
+              {botTyping ? "escribiendo..." : `${LANG_NAME[botLang]} · toca una palabra para traducir`}
             </Text>
           </View>
 
-          {/* Botón Icebreakers */}
           <Pressable onPress={() => setShowStarters((v) => !v)} style={{
-            paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12,
+            width: 36, height: 36, borderRadius: 18,
             borderWidth: 1,
             borderColor: showStarters ? colors.accent : colors.border,
-            backgroundColor: showStarters ? colors.accentSoft : colors.card,
+            backgroundColor: showStarters ? colors.accentSoft : "transparent",
+            alignItems: "center", justifyContent: "center",
           }}>
-            <Text style={{ fontSize: 16 }}>🧊</Text>
+            <Ionicons name="snow-outline" size={18} color={showStarters ? colors.accent : colors.fg} />
           </Pressable>
 
-          {/* Seguridad */}
           <Pressable onPress={() => setOpenSafety(true)} style={{
             width: 36, height: 36, borderRadius: 18,
             borderWidth: 1, borderColor: colors.border,
-            backgroundColor: colors.card,
             alignItems: "center", justifyContent: "center",
           }}>
-            <Text style={{ fontSize: 16 }}>🚨</Text>
+            <Ionicons name="shield-outline" size={18} color={colors.fg} />
           </Pressable>
         </View>
 
-        {/* Error traductor */}
-        {translatorOk === false && (
-          <View style={{ marginTop: 8, backgroundColor: "#ff3b3015", borderRadius: 10, padding: 8 }}>
-            <Text style={{ color: "#ff3b30", fontSize: 12, fontWeight: "700" }}>⚠ {translatorErr}</Text>
-          </View>
-        )}
-
-        {/* ── ICEBREAKERS ──────────────────────────────────────────────── */}
+        {/* Icebreakers */}
         {showStarters && starters.length > 0 && (
           <View style={{
-            marginTop: 12,
+            marginTop: 10,
             borderWidth: 1, borderColor: colors.border,
-            borderRadius: 18, overflow: "hidden",
+            borderRadius: 16, overflow: "hidden",
             backgroundColor: colors.card,
           }}>
             <View style={{
-              flexDirection: "row", justifyContent: "space-between",
-              alignItems: "center", paddingHorizontal: 14, paddingVertical: 10,
+              flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+              paddingHorizontal: 14, paddingVertical: 8,
               borderBottomWidth: 1, borderBottomColor: colors.border,
             }}>
-              <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 12, letterSpacing: 0.5, opacity: 0.6 }}>
-                🧊 ICEBREAKERS
+              <Text style={{ color: colors.fg, fontWeight: "700", fontSize: 11, opacity: 0.5, letterSpacing: 0.8 }}>
+                SUGERENCIAS
               </Text>
               <Pressable onPress={() => setShowStarters(false)}>
-                <Text style={{ color: colors.fg, opacity: 0.4, fontWeight: "700", fontSize: 12 }}>Cerrar ✕</Text>
+                <Ionicons name="close" size={16} color={colors.fg} style={{ opacity: 0.4 }} />
               </Pressable>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: 10, gap: 8 }}>
-              {starters.map((s) => (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: 8, gap: 6 }}>
+              {starters.map((s: any) => (
                 <Pressable key={s.id} onPress={() => onSend(s.textNative)} style={{
-                  paddingVertical: 10, paddingHorizontal: 14,
-                  borderRadius: 14, borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: colors.bg,
-                  maxWidth: 240, gap: 4,
+                  paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12,
+                  borderWidth: 1, borderColor: colors.border,
+                  backgroundColor: colors.bg, maxWidth: 220, gap: 2,
                 }}>
-                  {/* Texto en idioma nativo (lo que se envía) */}
-                  <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 13 }} numberOfLines={2}>
+                  <Text style={{ color: colors.fg, fontWeight: "600", fontSize: 13 }} numberOfLines={2}>
                     {s.textNative}
                   </Text>
-                  {/* Traducción al español (para que el usuario entienda) */}
                   {s.textEs !== s.textNative && (
-                    <Text style={{ color: colors.accent, fontWeight: "700", fontSize: 11 }} numberOfLines={1}>
-                      → {s.textEs}
+                    <Text style={{ color: colors.accent, fontWeight: "500", fontSize: 11 }} numberOfLines={1}>
+                      {s.textEs}
                     </Text>
                   )}
                 </Pressable>
@@ -516,7 +491,7 @@ export default function ChatScreen() {
         )}
       </View>
 
-      {/* ── CHAT ───────────────────────────────────────────────────────── */}
+      {/* ── MENSAJES ── */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -530,10 +505,9 @@ export default function ChatScreen() {
           showsVerticalScrollIndicator={false}
           ListFooterComponent={botTyping ? (
             <View style={{
-              alignSelf: "flex-start", marginBottom: 10,
+              alignSelf: "flex-start", marginBottom: 8,
               paddingHorizontal: 16, paddingVertical: 12,
-              backgroundColor: colors.card,
-              borderRadius: 18, borderTopLeftRadius: 4,
+              backgroundColor: colors.card, borderRadius: 18, borderTopLeftRadius: 4,
               borderWidth: 1, borderColor: colors.border,
             }}>
               <ActivityIndicator size="small" color={colors.accent} />
@@ -543,120 +517,238 @@ export default function ChatScreen() {
             <Bubble
               item={item}
               colors={colors}
+              reactions={reactions[item.id] ?? []}
               onWordPress={(token) => openTranslatorSheet(item.text, token, item.from)}
+              onLongPress={() => onLongPressMsg(item.id, item.text, item.from)}
+              onReactionPress={(emoji) => addReaction(item.id, emoji)}
+              playingUri={playingUri}
+              audioProgress={audioProgress}
+              onPlayAudio={playAudio}
             />
           )}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         />
 
-        {/* ── INPUT ──────────────────────────────────────────────────── */}
-        <View style={{
-          paddingHorizontal: 12, paddingVertical: 10,
-          borderTopWidth: 1, borderTopColor: colors.border,
-          backgroundColor: colors.bg,
-          flexDirection: "row", gap: 8, alignItems: "flex-end",
-        }}>
-          {/* Botón traductor del último mensaje */}
-          <Pressable
-            onPress={() => {
-              const last = [...msgs].reverse().find((m) => m.from === "them");
-              if (last) openTranslatorSheet(last.text, last.text.split(" ")[0], "them");
-            }}
-            style={{
-              width: 44, height: 44, borderRadius: 22,
-              backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-              alignItems: "center", justifyContent: "center",
-            }}
-          >
-            <Text style={{ fontSize: 20 }}>🔤</Text>
-          </Pressable>
+        {/* Reply preview */}
+        {replyTo && (
+          <View style={{
+            flexDirection: "row", alignItems: "center",
+            paddingHorizontal: 14, paddingVertical: 8,
+            backgroundColor: colors.card,
+            borderTopWidth: 1, borderTopColor: colors.accent + "30",
+            gap: 10,
+          }}>
+            <View style={{ width: 3, height: 34, borderRadius: 2, backgroundColor: colors.accent }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.accent, fontWeight: "700", fontSize: 11, marginBottom: 1 }}>
+                {replyTo.from === "me" ? "Vos" : match?.name ?? "Ellos"}
+              </Text>
+              <Text style={{ color: colors.fg, opacity: 0.6, fontSize: 13 }} numberOfLines={1}>
+                {replyTo.text}
+              </Text>
+            </View>
+            <Pressable onPress={() => setReplyTo(null)} style={{ padding: 4 }}>
+              <Ionicons name="close" size={18} color={colors.fg} style={{ opacity: 0.4 }} />
+            </Pressable>
+          </View>
+        )}
 
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            placeholder={`Escribí en ${LANG_NAME[botLang]}…`}
-            placeholderTextColor={colors.fg + "55"}
-            multiline
-            style={{
-              flex: 1, minHeight: 44, maxHeight: 120,
-              paddingHorizontal: 14, paddingVertical: 10,
-              borderRadius: 22, borderWidth: 1, borderColor: colors.border,
-              backgroundColor: colors.card, color: colors.fg, fontWeight: "600",
-              fontSize: 15,
-            }}
-          />
-          <Pressable
-            onPress={() => onSend()}
-            disabled={!text.trim() || botTyping}
-            style={{
-              width: 44, height: 44, borderRadius: 22,
-              backgroundColor: text.trim() && !botTyping ? colors.accent : colors.border,
+        {/* ── INPUT ── */}
+        {isRecording ? (
+          // Grabando
+          <View style={{
+            paddingHorizontal: 16, paddingVertical: 12,
+            borderTopWidth: 1, borderTopColor: colors.border,
+            backgroundColor: colors.bg,
+            flexDirection: "row", alignItems: "center", gap: 12,
+          }}>
+            <Pressable onPress={handleCancelRecording} style={{
+              paddingHorizontal: 14, paddingVertical: 8,
+              borderRadius: 20, borderWidth: 1, borderColor: "#ff3b30",
+            }}>
+              <Text style={{ color: "#ff3b30", fontWeight: "600", fontSize: 14 }}>Cancelar</Text>
+            </Pressable>
+
+            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Animated.View style={{
+                width: 10, height: 10, borderRadius: 5,
+                backgroundColor: "#ff3b30",
+                transform: [{ scale: recordAnim }],
+              }} />
+              <Text style={{ color: colors.fg, fontWeight: "600", fontSize: 15 }}>
+                {recordSeconds}s
+              </Text>
+              {/* Waveform animada */}
+              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 3, overflow: "hidden" }}>
+                {Array.from({ length: 20 }).map((_, i) => (
+                  <Animated.View key={i} style={{
+                    width: 3,
+                    height: 4 + Math.sin(i * 0.8) * 10 + 8,
+                    borderRadius: 2,
+                    backgroundColor: colors.accent,
+                    opacity: recordAnim,
+                  }} />
+                ))}
+              </View>
+            </View>
+
+            <Pressable onPress={handleAudioButton} style={{
+              width: 48, height: 48, borderRadius: 24,
+              backgroundColor: colors.accent,
               alignItems: "center", justifyContent: "center",
-            }}
-          >
-            <Text style={{ color: "white", fontWeight: "900", fontSize: 18 }}>↑</Text>
-          </Pressable>
-        </View>
+            }}>
+              <Ionicons name="send" size={20} color="#fff" />
+            </Pressable>
+          </View>
+        ) : (
+          // Normal
+          <View style={{
+            paddingHorizontal: 12, paddingVertical: 10,
+            borderTopWidth: 1, borderTopColor: colors.border,
+            backgroundColor: colors.bg,
+            flexDirection: "row", gap: 8, alignItems: "flex-end",
+          }}>
+            {/* Botón traducir último mensaje */}
+            <Pressable
+              onPress={() => {
+                const last = [...msgs].reverse().find((m) => m.from === "them");
+                if (last) openTranslatorSheet(last.text, last.text.split(" ")[0], "them");
+              }}
+              style={{
+                width: 42, height: 42, borderRadius: 21,
+                backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+                alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <Ionicons name="language-outline" size={20} color={colors.fg} />
+            </Pressable>
+
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              placeholder={`Escribí en ${LANG_NAME[botLang]}…`}
+              placeholderTextColor={colors.fg + "44"}
+              multiline
+              style={{
+                flex: 1, minHeight: 42, maxHeight: 120,
+                paddingHorizontal: 14, paddingVertical: 10,
+                borderRadius: 21, borderWidth: 1, borderColor: colors.border,
+                backgroundColor: colors.card, color: colors.fg,
+                fontWeight: "500", fontSize: 15,
+              }}
+            />
+
+            {text.trim() ? (
+              <Pressable onPress={() => onSend()} style={{
+                width: 42, height: 42, borderRadius: 21,
+                backgroundColor: colors.accent,
+                alignItems: "center", justifyContent: "center",
+              }}>
+                <Ionicons name="send" size={18} color="#fff" />
+              </Pressable>
+            ) : (
+              // Botón audio — toque simple para iniciar
+              <Pressable onPress={handleAudioButton} style={{
+                width: 42, height: 42, borderRadius: 21,
+                backgroundColor: colors.card,
+                borderWidth: 1, borderColor: colors.border,
+                alignItems: "center", justifyContent: "center",
+              }}>
+                <Ionicons name="mic-outline" size={20} color={colors.fg} />
+              </Pressable>
+            )}
+          </View>
+        )}
       </KeyboardAvoidingView>
 
-      {/* ── MODAL TRADUCTOR ────────────────────────────────────────────── */}
+      {/* ── MENÚ CONTEXTUAL ── */}
+      <Modal visible={!!contextMenu} transparent animationType="fade">
+        <Pressable
+          onPress={() => setContextMenu(null)}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" }}
+        >
+          <Pressable onPress={() => {}} style={{
+            backgroundColor: colors.bg, borderRadius: 20,
+            padding: 14, width: 270,
+            borderWidth: 1, borderColor: colors.border, gap: 6,
+          }}>
+            {/* Reacciones */}
+            <View style={{ flexDirection: "row", justifyContent: "space-around", paddingVertical: 6 }}>
+              {QUICK_REACTIONS.map((emoji) => (
+                <Pressable key={emoji} onPress={() => contextMenu && addReaction(contextMenu.msgId, emoji)} style={{ padding: 6 }}>
+                  <Text style={{ fontSize: 26 }}>{emoji}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 2 }} />
+
+            {/* Responder */}
+            <Pressable
+              onPress={() => {
+                if (contextMenu) setReplyTo({ id: contextMenu.msgId, text: contextMenu.text, from: contextMenu.from });
+                setContextMenu(null);
+              }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 10, borderRadius: 12, backgroundColor: colors.card }}
+            >
+              <Ionicons name="return-down-back-outline" size={20} color={colors.fg} />
+              <Text style={{ color: colors.fg, fontWeight: "600", fontSize: 15 }}>Responder</Text>
+            </Pressable>
+
+            {/* Traducir */}
+            <Pressable
+              onPress={() => {
+                if (contextMenu) openTranslatorSheet(contextMenu.text, contextMenu.text.split(" ")[0], contextMenu.from);
+                setContextMenu(null);
+              }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 10, borderRadius: 12, backgroundColor: colors.card }}
+            >
+              <Ionicons name="language-outline" size={20} color={colors.fg} />
+              <Text style={{ color: colors.fg, fontWeight: "600", fontSize: 15 }}>Traducir</Text>
+            </Pressable>
+
+            <Pressable onPress={() => setContextMenu(null)} style={{ padding: 8, alignItems: "center" }}>
+              <Text style={{ color: colors.fg, opacity: 0.4, fontWeight: "600", fontSize: 14 }}>Cancelar</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── MODAL TRADUCTOR ── */}
       <Modal visible={openWord} transparent animationType="slide">
         <Pressable
           onPress={() => setOpenWord(false)}
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}
         >
           <Pressable onPress={() => {}} style={{
             backgroundColor: colors.bg,
-            borderTopLeftRadius: 28, borderTopRightRadius: 28,
-            padding: 20,
-            borderTopWidth: 1, borderColor: colors.border,
-            maxHeight: "88%",
+            borderTopLeftRadius: 24, borderTopRightRadius: 24,
+            padding: 20, borderTopWidth: 1, borderColor: colors.border, maxHeight: "88%",
           }}>
-            {/* Handle */}
-            <View style={{
-              alignSelf: "center", width: 40, height: 4,
-              borderRadius: 2, backgroundColor: colors.border, marginBottom: 16,
-            }} />
-
+            <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: 16 }} />
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Oración original */}
-              <Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "800", fontSize: 11, letterSpacing: 1, marginBottom: 8 }}>
-                ORACIÓN ORIGINAL
+              <Text style={{ color: colors.fg, opacity: 0.4, fontWeight: "700", fontSize: 11, letterSpacing: 1, marginBottom: 8 }}>
+                ORIGINAL
               </Text>
-              <View style={{
-                backgroundColor: colors.card, borderRadius: 14,
-                borderWidth: 1, borderColor: colors.border,
-                padding: 14, marginBottom: 20,
-              }}>
-                <Text style={{ color: colors.fg, fontWeight: "700", lineHeight: 22 }}>{activeSentence || "—"}</Text>
+              <View style={{ backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 14, marginBottom: 16 }}>
+                <Text style={{ color: colors.fg, fontWeight: "500", lineHeight: 22 }}>{activeSentence || "—"}</Text>
               </View>
 
-              {/* Palabra seleccionada + significado */}
-              <View style={{
-                backgroundColor: colors.accentSoft,
-                borderRadius: 16, borderWidth: 1, borderColor: colors.accent + "40",
-                padding: 16, marginBottom: 16,
-              }}>
-                <Text style={{ color: colors.accent, fontWeight: "900", fontSize: 26, marginBottom: 6 }}>
-                  {selectedToken || "—"}
-                </Text>
+              <View style={{ backgroundColor: colors.accentSoft, borderRadius: 14, borderWidth: 1, borderColor: colors.accent + "30", padding: 16, marginBottom: 16 }}>
+                <Text style={{ color: colors.accent, fontWeight: "800", fontSize: 24, marginBottom: 4 }}>{selectedToken || "—"}</Text>
                 {meaningLoading ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <ActivityIndicator size="small" color={colors.accent} />
-                    <Text style={{ color: colors.fg, opacity: 0.6, fontWeight: "600" }}>Traduciendo…</Text>
+                    <Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "500" }}>Traduciendo…</Text>
                   </View>
                 ) : (
-                  <Text style={{ color: colors.fg, fontWeight: "700", fontSize: 16 }}>
-                    {wordMeaning || "—"}
-                  </Text>
+                  <Text style={{ color: colors.fg, fontWeight: "600", fontSize: 15 }}>{wordMeaning || "—"}</Text>
                 )}
               </View>
 
-              {/* Palabra por palabra */}
-              <Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "800", fontSize: 11, letterSpacing: 1, marginBottom: 10 }}>
+              <Text style={{ color: colors.fg, opacity: 0.4, fontWeight: "700", fontSize: 11, letterSpacing: 1, marginBottom: 10 }}>
                 PALABRA POR PALABRA
               </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginBottom: 20 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 16 }}>
                 {wordTokens.map((wt) => {
                   const active = wt.index === selectedIndex;
                   const meaning = tokenMeanings[wt.index];
@@ -665,116 +757,85 @@ export default function ChatScreen() {
                       key={`${wt.index}-${wt.token}`}
                       onPress={() => translateOneToken(wt, activeSourceLang)}
                       style={{
-                        paddingVertical: 10, paddingHorizontal: 14,
-                        borderRadius: 14, borderWidth: 1,
+                        paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1,
                         borderColor: active ? colors.accent : colors.border,
                         backgroundColor: active ? colors.accentSoft : colors.card,
-                        minWidth: 80, maxWidth: 160, alignItems: "center",
+                        minWidth: 70, alignItems: "center",
                       }}
                     >
-                      <Text style={{ color: colors.fg, fontWeight: "900", fontSize: 15 }} numberOfLines={1}>
-                        {wt.token}
-                      </Text>
+                      <Text style={{ color: colors.fg, fontWeight: "700", fontSize: 14 }} numberOfLines={1}>{wt.token}</Text>
                       {meaning ? (
-                        <Text style={{ color: colors.accent, fontWeight: "700", fontSize: 11, marginTop: 4 }} numberOfLines={2}>
-                          {meaning}
-                        </Text>
+                        <Text style={{ color: colors.accent, fontWeight: "600", fontSize: 11, marginTop: 2 }} numberOfLines={1}>{meaning}</Text>
                       ) : (
-                        <Text style={{ color: colors.fg, opacity: 0.3, fontSize: 11, marginTop: 4 }}>—</Text>
+                        <Text style={{ color: colors.fg, opacity: 0.25, fontSize: 11, marginTop: 2 }}>—</Text>
                       )}
                     </Pressable>
                   );
                 })}
               </ScrollView>
 
-              {/* Traducir toda la oración */}
               <Pressable
                 onPress={translateWholeSentence}
-                style={{
-                  paddingVertical: 14, borderRadius: 16,
-                  backgroundColor: colors.accent, alignItems: "center", marginBottom: 12,
-                }}
+                style={{ paddingVertical: 14, borderRadius: 14, backgroundColor: colors.accent, alignItems: "center", marginBottom: 10 }}
               >
-                <Text style={{ color: "white", fontWeight: "900", fontSize: 15 }}>
+                <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>
                   {sentenceLoading ? "Traduciendo…" : "Traducir oración completa"}
                 </Text>
               </Pressable>
 
               {sentenceMeaning ? (
-                <View style={{
-                  backgroundColor: colors.card, borderRadius: 14,
-                  borderWidth: 1, borderColor: colors.border, padding: 14, marginBottom: 16,
-                }}>
-                  <Text style={{ color: colors.fg, fontWeight: "700", lineHeight: 22 }}>{sentenceMeaning}</Text>
+                <View style={{ backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 14, marginBottom: 12 }}>
+                  <Text style={{ color: colors.fg, fontWeight: "500", lineHeight: 22 }}>{sentenceMeaning}</Text>
                 </View>
               ) : null}
 
               <Pressable onPress={() => setOpenWord(false)} style={{
-                paddingVertical: 14, borderRadius: 16,
+                paddingVertical: 14, borderRadius: 14,
                 borderWidth: 1, borderColor: colors.border,
                 backgroundColor: colors.card, alignItems: "center",
               }}>
-                <Text style={{ color: colors.fg, fontWeight: "700" }}>Cerrar</Text>
+                <Text style={{ color: colors.fg, fontWeight: "600" }}>Cerrar</Text>
               </Pressable>
             </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
 
-      {/* ── MODAL SEGURIDAD ─────────────────────────────────────────────── */}
+      {/* ── MODAL SEGURIDAD ── */}
       <Modal visible={openSafety} transparent animationType="slide">
-        <Pressable
-          onPress={() => setOpenSafety(false)}
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}
-        >
+        <Pressable onPress={() => setOpenSafety(false)} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}>
           <Pressable onPress={() => {}} style={{
             backgroundColor: colors.bg, padding: 20,
-            borderTopLeftRadius: 24, borderTopRightRadius: 24,
+            borderTopLeftRadius: 20, borderTopRightRadius: 20,
             borderTopWidth: 1, borderColor: colors.border,
           }}>
-            <Text style={{ color: colors.fg, fontSize: 20, fontWeight: "900", marginBottom: 4 }}>Seguridad</Text>
-            <Text style={{ color: colors.fg, opacity: 0.5, fontWeight: "600", marginBottom: 16, fontSize: 13 }}>
-              Denunciá o bloqueá con un toque.
+            <Text style={{ color: colors.fg, fontSize: 18, fontWeight: "700", marginBottom: 4 }}>Seguridad</Text>
+            <Text style={{ color: colors.fg, opacity: 0.4, fontWeight: "500", marginBottom: 16, fontSize: 13 }}>
+              Denunciá o bloqueá este usuario.
             </Text>
-            <View style={{ gap: 10 }}>
+            <View style={{ gap: 8 }}>
               {(["spam", "acoso", "contenido_sexual", "odio", "estafa", "otro"] as ReportReason[]).map((k) => (
                 <Pressable key={k}
-                  onPress={async () => {
-                    await reportUser({ id: matchId, reason: k, note: reportNote?.trim() || undefined });
-                    setOpenSafety(false);
-                  }}
-                  style={{
-                    padding: 14, borderRadius: 14,
-                    borderWidth: 1, borderColor: colors.border,
-                    backgroundColor: colors.card,
-                  }}>
-                  <Text style={{ color: colors.fg, fontWeight: "800" }}>
-                    Denunciar: {k.replace("_", " ")}
-                  </Text>
+                  onPress={async () => { await reportUser({ id: matchId, reason: k, note: reportNote?.trim() || undefined }); setOpenSafety(false); }}
+                  style={{ padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}
+                >
+                  <Text style={{ color: colors.fg, fontWeight: "600" }}>Denunciar: {k.replace("_", " ")}</Text>
                 </Pressable>
               ))}
               <TextInput
                 value={reportNote} onChangeText={setReportNote}
-                placeholder="Nota opcional…"
-                placeholderTextColor={colors.fg + "55"}
-                style={{
-                  borderWidth: 1, borderColor: colors.border, borderRadius: 14,
-                  padding: 14, backgroundColor: colors.card, color: colors.fg, fontWeight: "600",
-                }}
+                placeholder="Nota opcional…" placeholderTextColor={colors.fg + "44"}
+                style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, backgroundColor: colors.card, color: colors.fg }}
               />
               <Pressable
-                onPress={async () => {
-                  await blockUser(matchId);
-                  setOpenSafety(false);
-                  router.replace("/(tabs)/home");
-                }}
-                style={{ padding: 14, borderRadius: 14, backgroundColor: "#ff3b30" }}>
-                <Text style={{ color: "#fff", fontWeight: "900", textAlign: "center" }}>
-                  🚫 Bloquear y salir
-                </Text>
+                onPress={async () => { await blockUser(matchId); setOpenSafety(false); router.replace("/(tabs)/home"); }}
+                style={{ padding: 14, borderRadius: 12, backgroundColor: "#ff3b30", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
+              >
+                <Ionicons name="ban-outline" size={18} color="#fff" />
+                <Text style={{ color: "#fff", fontWeight: "700" }}>Bloquear y salir</Text>
               </Pressable>
-              <Pressable onPress={() => setOpenSafety(false)} style={{ padding: 12 }}>
-                <Text style={{ textAlign: "center", fontWeight: "700", color: colors.fg, opacity: 0.5 }}>Cancelar</Text>
+              <Pressable onPress={() => setOpenSafety(false)} style={{ padding: 10, alignItems: "center" }}>
+                <Text style={{ fontWeight: "600", color: colors.fg, opacity: 0.4 }}>Cancelar</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -784,65 +845,118 @@ export default function ChatScreen() {
   );
 }
 
-// ─── Bubble ──────────────────────────────────────────────────────────────────
-
-function Bubble({ item, colors, onWordPress }: {
-  item: ChatMessage; colors: any; onWordPress: (w: string) => void;
+// ─── Bubble ───────────────────────────────────────────────────────────────────
+function Bubble({ item, colors, reactions, onWordPress, onLongPress, onReactionPress, playingUri, audioProgress, onPlayAudio }: {
+  item: ChatMessage;
+  colors: any;
+  reactions: Reaction[];
+  onWordPress: (w: string) => void;
+  onLongPress: () => void;
+  onReactionPress: (emoji: string) => void;
+  playingUri: string | null;
+  audioProgress: number;
+  onPlayAudio: (uri: string) => void;
 }) {
   const mine = item.from === "me";
   const parts = useMemo(() => tokenizeWords(item.text), [item.text]);
+  const isAudio = item.text.includes("__AUDIO__");
+  const audioUri = isAudio ? item.text.split("__AUDIO__")[1]?.split("__DURATION__")[0] : null;
+  const audioDuration = isAudio ? item.text.split("__DURATION__")[1] ?? "" : null;
+  const isPlaying = audioUri ? playingUri === audioUri : false;
 
   return (
-    <View style={{
-      alignSelf: mine ? "flex-end" : "flex-start",
-      maxWidth: "82%", marginBottom: 12,
-    }}>
-      <View style={{
-        backgroundColor: mine ? colors.accent : colors.card,
-        borderRadius: 20,
-        borderTopRightRadius: mine ? 4 : 20,
-        borderTopLeftRadius: mine ? 20 : 4,
-        paddingHorizontal: 14, paddingVertical: 10,
-        borderWidth: 1,
-        borderColor: mine ? "transparent" : colors.border,
-        shadowColor: "#000",
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 2 },
-      }}>
-        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-          {parts.map((p, idx) => {
-            const isWord = !p.match(/^\s+$/) && !p.match(/^[,.!?;:()¿¡"""''\-]+$/);
-            if (!isWord) {
-              return (
-                <Text key={`${idx}-${p}`} style={{
-                  color: mine ? "rgba(255,255,255,0.9)" : colors.fg,
-                  fontWeight: "500", fontSize: 15, lineHeight: 22,
-                }}>
-                  {p}
-                </Text>
-              );
-            }
-            return (
-              <Pressable key={`${idx}-${p}`} onPress={() => onWordPress(p)}>
-                <Text style={{
-                  color: mine ? "#fff" : colors.fg,
-                  fontWeight: "700", fontSize: 15, lineHeight: 22,
-                  textDecorationLine: mine ? "none" : "underline",
-                  textDecorationColor: colors.accent + "80",
-                }}>
-                  {p}
-                </Text>
-              </Pressable>
-            );
-          })}
+    <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "80%", marginBottom: reactions.length > 0 ? 22 : 10 }}>
+      <Pressable onLongPress={onLongPress} delayLongPress={300}>
+        <View style={{
+          backgroundColor: mine ? colors.accent : colors.card,
+          borderRadius: 18,
+          borderTopRightRadius: mine ? 4 : 18,
+          borderTopLeftRadius: mine ? 18 : 4,
+          paddingHorizontal: 14, paddingVertical: 10,
+          borderWidth: mine ? 0 : 1,
+          borderColor: colors.border,
+        }}>
+          {isAudio ? (
+            <Pressable onPress={() => audioUri && onPlayAudio(audioUri)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 10, minWidth: 160 }}
+            >
+              <View style={{
+                width: 34, height: 34, borderRadius: 17,
+                backgroundColor: mine ? "rgba(255,255,255,0.18)" : colors.accentSoft,
+                alignItems: "center", justifyContent: "center",
+              }}>
+                <Ionicons
+                  name={isPlaying ? "pause" : "play"}
+                  size={16}
+                  color={mine ? "#fff" : colors.accent}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                {/* Barra de progreso */}
+                <View style={{ height: 3, borderRadius: 2, backgroundColor: mine ? "rgba(255,255,255,0.2)" : colors.border, marginBottom: 6, overflow: "hidden" }}>
+                  <View style={{
+                    height: 3, borderRadius: 2,
+                    backgroundColor: mine ? "rgba(255,255,255,0.85)" : colors.accent,
+                    width: `${isPlaying ? audioProgress * 100 : 0}%` as any,
+                  }} />
+                </View>
+                {/* Waveform estática */}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                  {[3, 7, 11, 5, 13, 9, 7, 14, 5, 9, 7, 11].map((h, i) => (
+                    <View key={i} style={{
+                      width: 2.5, height: h, borderRadius: 2,
+                      backgroundColor: mine ? "rgba(255,255,255,0.55)" : colors.accent + "88",
+                    }} />
+                  ))}
+                </View>
+              </View>
+              <Text style={{ color: mine ? "rgba(255,255,255,0.65)" : colors.fg, fontSize: 11, fontWeight: "600" }}>
+                {audioDuration}
+              </Text>
+            </Pressable>
+          ) : (
+            <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+              {parts.map((p, idx) => {
+                const isWord = !p.match(/^\s+$/) && !p.match(/^[,.!?;:()¿¡"""'''\-]+$/);
+                if (!isWord) return (
+                  <Text key={`${idx}-${p}`} style={{ color: mine ? "rgba(255,255,255,0.88)" : colors.fg, fontWeight: "400", fontSize: 15, lineHeight: 22 }}>{p}</Text>
+                );
+                return (
+                  <Pressable key={`${idx}-${p}`} onPress={() => onWordPress(p)}>
+                    <Text style={{
+                      color: mine ? "#fff" : colors.fg,
+                      fontWeight: "500", fontSize: 15, lineHeight: 22,
+                      textDecorationLine: mine ? "none" : "underline",
+                      textDecorationColor: colors.accent + "55",
+                    }}>{p}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
         </View>
-      </View>
+      </Pressable>
+
+      {/* Reacciones */}
+      {reactions.length > 0 && (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4, alignSelf: mine ? "flex-end" : "flex-start" }}>
+          {reactions.map((r) => (
+            <Pressable key={r.emoji} onPress={() => onReactionPress(r.emoji)} style={{
+              flexDirection: "row", alignItems: "center", gap: 3,
+              paddingHorizontal: 7, paddingVertical: 3, borderRadius: 20,
+              backgroundColor: r.mine ? colors.accentSoft : colors.card,
+              borderWidth: 1, borderColor: r.mine ? colors.accent + "50" : colors.border,
+            }}>
+              <Text style={{ fontSize: 13 }}>{r.emoji}</Text>
+              {r.count > 1 && <Text style={{ color: colors.fg, fontSize: 11, fontWeight: "700" }}>{r.count}</Text>}
+            </Pressable>
+          ))}
+        </View>
+      )}
+
       <Text style={{
-        marginTop: 4, fontSize: 11, fontWeight: "600",
-        color: colors.fg, opacity: 0.35,
-        alignSelf: mine ? "flex-end" : "flex-start",
-        paddingHorizontal: 4,
+        marginTop: 3, fontSize: 11, color: colors.fg, opacity: 0.3,
+        alignSelf: mine ? "flex-end" : "flex-start", paddingHorizontal: 2,
       }}>
         {new Date(item.ts).toLocaleTimeString().slice(0, 5)}
       </Text>
