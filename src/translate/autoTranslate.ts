@@ -1,18 +1,19 @@
 // src/translate/autoTranslate.ts
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { LanguageCode } from "../storage";
-import type { TranslateWordInContextRequest, TranslateResponse } from "./types";
+import type { LanguageCode, TranslateRequest, TranslateResponse } from "./types";
 
 const LANG_ISO: Record<LanguageCode, string> = {
-  es: "es", en: "en", de: "de", ru: "ru", ja: "ja", zh: "zh-CN",
+  es: "es",
+  en: "en",
+  de: "de",
+  ru: "ru",
+  ja: "ja",
+  zh: "zh-CN",
 };
 
-const _mem = new Map<string, string>();
-const PREFIX = "tr2:";
-const MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+const _cache = new Map<string, string>();
 
 function cleanText(s: string): string {
-  return (s ?? "")
+  return s
     .replace(/[\u2018\u2019\u02BC\u0060]/g, "'")
     .replace(/[\u201C\u201D]/g, '"')
     .replace(/[\u2013\u2014]/g, "-")
@@ -20,96 +21,159 @@ function cleanText(s: string): string {
     .trim();
 }
 
-async function fromDisk(key: string): Promise<string | null> {
-  try {
-    const raw = await AsyncStorage.getItem(PREFIX + key);
-    if (!raw) return null;
-    const { v, t } = JSON.parse(raw);
-    if (Date.now() - t > MAX_AGE) { AsyncStorage.removeItem(PREFIX + key); return null; }
-    return v;
-  } catch { return null; }
+function cKey(text: string, src: string, tgt: string): string {
+  return src + ":" + tgt + ":" + text.trim().toLowerCase();
 }
 
-async function toDisk(key: string, value: string): Promise<void> {
-  try {
-    await AsyncStorage.setItem(PREFIX + key, JSON.stringify({ v: value, t: Date.now() }));
-  } catch {}
+function resolveIso(lang: LanguageCode | "auto" | undefined): string {
+  if (!lang || lang === "auto") return "auto";
+  return LANG_ISO[lang] ?? lang;
 }
 
-async function tryGoogle(text: string, from: LanguageCode, to: LanguageCode): Promise<string | null> {
+async function googleTranslate(
+  text: string,
+  src: LanguageCode | "auto",
+  tgt: LanguageCode
+): Promise<string | null> {
   try {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${LANG_ISO[from]}&tl=${LANG_ISO[to]}&dt=t&q=${encodeURIComponent(text)}`;
+    const q = cleanText(text);
+    const url =
+      "https://translate.googleapis.com/translate_a/single?client=gtx" +
+      "&sl=" +
+      resolveIso(src) +
+      "&tl=" +
+      resolveIso(tgt) +
+      "&dt=t&q=" +
+      encodeURIComponent(q);
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 5000);
+    const timer = setTimeout(() => ctrl.abort(), 6000);
     const res = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(t);
+    clearTimeout(timer);
     if (!res.ok) return null;
     const data = await res.json();
-    const out = ((data[0] ?? []) as any[][]).map((s) => s[0] ?? "").join("").trim();
-    return out || null;
-  } catch { return null; }
+    const result = ((data[0] ?? []) as [string, ...unknown[]][])
+      .map((seg) => (seg[0] ?? "") as string)
+      .join("")
+      .trim();
+    return result && result.toLowerCase() !== q.toLowerCase() ? result : null;
+  } catch {
+    return null;
+  }
 }
 
-async function tryMyMemory(text: string, from: LanguageCode, to: LanguageCode): Promise<string | null> {
+async function myMemoryTranslate(
+  text: string,
+  src: LanguageCode | "auto",
+  tgt: LanguageCode
+): Promise<string | null> {
   try {
-    const pair = `${LANG_ISO[from]}|${LANG_ISO[to]}`;
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent(pair)}`;
+    const q = cleanText(text);
+    const srcIso = src === "auto" ? "en" : LANG_ISO[src] ?? src;
+    const langPair = srcIso + "|" + resolveIso(tgt);
+    const url =
+      "https://api.mymemory.translated.net/get?q=" +
+      encodeURIComponent(q) +
+      "&langpair=" +
+      encodeURIComponent(langPair);
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 4000);
+    const timer = setTimeout(() => ctrl.abort(), 6000);
     const res = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(t);
+    clearTimeout(timer);
     if (!res.ok) return null;
-    const data = await res.json();
-    const translated: string = data?.responseData?.translatedText ?? "";
-    if (!translated || translated.includes("%")) return null;
+    const data = (await res.json()) as {
+      responseData?: { translatedText?: string };
+      responseStatus?: number;
+    };
+    const translated = data?.responseData?.translatedText ?? "";
+    const status = data?.responseStatus ?? 0;
+    if (
+      status !== 200 ||
+      !translated ||
+      translated.includes("%") ||
+      translated.toLowerCase() === q.toLowerCase()
+    )
+      return null;
     return translated.trim();
-  } catch { return null; }
+  } catch {
+    return null;
+  }
+}
+
+async function translateRaw(
+  text: string,
+  src: LanguageCode | "auto",
+  tgt: LanguageCode
+): Promise<string> {
+  const raw = cleanText(text);
+  if (!raw) return raw;
+  if (src !== "auto" && src === tgt) return raw;
+
+  const key = cKey(raw, src, tgt);
+  if (_cache.has(key)) return _cache.get(key)!;
+
+  const google = await googleTranslate(raw, src, tgt);
+  if (google) {
+    _cache.set(key, google);
+    return google;
+  }
+
+  const mm = await myMemoryTranslate(raw, src, tgt);
+  if (mm) {
+    _cache.set(key, mm);
+    return mm;
+  }
+
+  return raw;
 }
 
 export async function translateCached(params: {
   text: string;
   targetLang: LanguageCode;
-  sourceLang?: LanguageCode;
-}): Promise<string | null> {
-  const { text, targetLang, sourceLang = "en" } = params;
-  const clean = cleanText(text);
-  if (!clean || sourceLang === targetLang) return text;
-
-  const key = `${sourceLang}:${targetLang}:${clean.slice(0, 120).toLowerCase()}`;
-
-  if (_mem.has(key)) return _mem.get(key)!;
-  const disk = await fromDisk(key);
-  if (disk) { _mem.set(key, disk); return disk; }
-
-  const google = await tryGoogle(clean, sourceLang, targetLang);
-  if (google) { _mem.set(key, google); await toDisk(key, google); return google; }
-
-  const mm = await tryMyMemory(clean, sourceLang, targetLang);
-  if (mm) { _mem.set(key, mm); await toDisk(key, mm); return mm; }
-
-  return null;
+  sourceLang: LanguageCode | "auto";
+}): Promise<string> {
+  return translateRaw(params.text, params.sourceLang, params.targetLang);
 }
 
-export async function translateWordInContextCached(
-  params: TranslateWordInContextRequest
-): Promise<Partial<TranslateResponse> | null> {
+export async function translateWordInContextCached(params: {
+  fullText: string;
+  tappedTokenIndex: number;
+  sourceLang: LanguageCode | "auto";
+  targetLang: LanguageCode;
+}): Promise<{ tappedMeaning: string; translatedWord: string }> {
   const { fullText, tappedTokenIndex, sourceLang, targetLang } = params;
+  const tokens = fullText
+    .split(/(\s+|[,.!?;:()¿¡"""''\-])/g)
+    .filter((t: string) => t !== "");
+  const word = (tokens[tappedTokenIndex] ?? "").trim();
+  if (!word) return { tappedMeaning: "—", translatedWord: "—" };
+  const result = await translateRaw(word, sourceLang, targetLang);
+  const meaning = result !== word ? result : "—";
+  return { tappedMeaning: meaning, translatedWord: meaning };
+}
 
-  const words = fullText.trim().split(/\s+/);
-  const raw = words[tappedTokenIndex] ?? "";
-  const clean = cleanText(raw.replace(/^[,.!?;:()"'«»]+|[,.!?;:()"'«»]+$/g, ""));
-  if (!clean) return null;
+export async function translate(req: TranslateRequest): Promise<TranslateResponse> {
+  const src = req.sourceLang ?? "auto";
+  const tgt = req.targetLang;
 
-  const key = `ctx:${sourceLang}:${targetLang}:${clean.toLowerCase()}`;
-  if (_mem.has(key)) return { tappedMeaning: _mem.get(key)!, translatedWord: _mem.get(key)! };
-  const disk = await fromDisk(key);
-  if (disk) { _mem.set(key, disk); return { tappedMeaning: disk, translatedWord: disk }; }
-
-  const result = await translateCached({ text: clean, targetLang, sourceLang });
-  if (result) {
-    _mem.set(key, result);
-    await toDisk(key, result);
-    return { tappedMeaning: result, translatedWord: result };
+  if (req.mode === "word_in_context" && req.tapped) {
+    const tappedResult = await translateRaw(req.tapped, src, tgt);
+    const tappedMeaning = tappedResult !== req.tapped ? tappedResult : null;
+    const translatedText = await translateRaw(req.text, src, tgt);
+    return {
+      translatedText,
+      targetLang: tgt,
+      sourceLang: src,
+      tappedMeaning,
+      usedWindow: req.window ?? null,
+    };
   }
-  return null;
+
+  const translatedText = await translateRaw(req.text, src, tgt);
+  return {
+    translatedText,
+    targetLang: tgt,
+    sourceLang: src,
+    tappedMeaning: null,
+    usedWindow: null,
+  };
 }

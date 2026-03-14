@@ -1,0 +1,32 @@
+amistad-app/app/(tabs)/home.tsx(74,42): error TS2339: Property 'muted' does not exist on type '{ bg: string; card: string; text: string; subtext: string; border: string; primary: string; bubbleMe: string; bubbleThem: string; fg: string; accent: string; accentSoft: string; }'.
+amistad-app/app/(tabs)/home.tsx(82,42): error TS2339: Property 'muted' does not exist on type '{ bg: string; card: string; text: string; subtext: string; border: string; primary: string; bubbleMe: string; bubbleThem: string; fg: string; accent: string; accentSoft: string; }'.
+amistad-app/app/(tabs)/profile.tsx(21,3): error TS2724: '"../../src/storage/profileStore"' has no exported member named 'getMyProfile'. Did you mean 'getProfile'?
+amistad-app/app/(tabs)/profile.tsx(22,3): error TS2305: Module '"../../src/storage/profileStore"' has no exported member 'updateMyProfile'.
+amistad-app/app/(tabs)/profile.tsx(23,3): error TS2305: Module '"../../src/storage/profileStore"' has no exported member 'addProfilePhoto'.
+amistad-app/app/(tabs)/profile.tsx(24,3): error TS2305: Module '"../../src/storage/profileStore"' has no exported member 'removeProfilePhoto'.
+amistad-app/app/(tabs)/profile.tsx(25,3): error TS2305: Module '"../../src/storage/profileStore"' has no exported member 'addStory'.
+amistad-app/app/(tabs)/profile.tsx(26,3): error TS2305: Module '"../../src/storage/profileStore"' has no exported member 'deleteStory'.
+amistad-app/app/(tabs)/profile.tsx(27,8): error TS2724: '"../../src/storage/profileStore"' has no exported member named 'MyProfile'. Did you mean 'Profile'?
+amistad-app/app/(tabs)/profile.tsx(28,8): error TS2305: Module '"../../src/storage/profileStore"' has no exported member 'ProfileStory'.
+amistad-app/app/app/(tabs)/icebreaker/[id].tsx(9,56): error TS2307: Cannot find module '@/src/translate/autoTranslate' or its corresponding type declarations.
+amistad-app/app/app/(tabs)/icebreaker/[id].tsx(10,15): error TS2305: Module '"@/src/translate/apiClient"' has no exported member 'LanguageCode'.
+amistad-app/app/app/(tabs)/icebreaker/[id].tsx(78,22): error TS7006: Parameter 't' implicitly has an 'any' type.
+amistad-app/app/app/(tabs)/icebreaker/[id].tsx(78,25): error TS7006: Parameter 'idx' implicitly has an 'any' type.
+amistad-app/app/app/(tabs)/settings.tsx(28,34): error TS2339: Property 'isDark' does not exist on type '{ mode: ThemeMode; setMode: (m: ThemeMode) => Promise<void>; colors: { bg: string; card: string; text: string; subtext: string; border: string; primary: string; ... 4 more ...; accentSoft: string; }; scheme: "light" | "dark"; }'.
+amistad-app/src/mock/matches.ts(2,15): error TS2305: Module '"../translate/translatorApi"' has no exported member 'LanguageCode'.
+amistad-app/src/translate/detect.ts(2,15): error TS2305: Module '"./types"' has no exported member 'Lang'.
+amistad-app/src/translate/fallback.ts(2,15): error TS2305: Module '"./types"' has no exported member 'Lang'.
+amistad-app/src/translate/fallback.ts(2,21): error TS2724: '"./types"' has no exported member named 'TranslateProResponse'. Did you mean 'TranslateResponse'?
+amistad-app/src/translate/fallback.ts(2,43): error TS2305: Module '"./types"' has no exported member 'TokenSegment'.
+amistad-app/src/translate/tokenize.ts(2,10): error TS2305: Module '"./types"' has no exported member 'Token'.
+app/(tabs)/profile/[id].tsx(10,15): error TS2305: Module '"../../../src/storage"' has no exported member 'StoryItem'.
+app/(tabs)/settings.tsx(7,29): error TS2724: '"../../src/theme"' has no exported member named 'ThemeMode'. Did you mean 'useThemeMode'?
+app/age.tsx(54,13): error TS2339: Property 'dob' does not exist on type 'ProfileData'.
+app/age.tsx(55,18): error TS2339: Property 'dob' does not exist on type 'ProfileData'.
+app/age.tsx(56,20): error TS2339: Property 'dob' does not exist on type 'ProfileData'.
+app/age.tsx(57,19): error TS2339: Property 'dob' does not exist on type 'ProfileData'.
+app/age.tsx(77,27): error TS2353: Object literal may only specify known properties, and 'dob' does not exist in type 'Partial<ProfileData>'.
+app/app/(tabs)/settings.tsx(28,34): error TS2339: Property 'isDark' does not exist on type '{ mode: ThemeMode; setMode: (m: ThemeMode) => Promise<void>; colors: { bg: string; card: string; text: string; subtext: string; border: string; primary: string; ... 4 more ...; accentSoft: string; }; scheme: "light" | "dark"; }'.
+app/app/_tabs_off/index.tsx(3,10): error TS2305: Module '"../../../src/storage"' has no exported member 'isLoggedIn'.
+src/components/StoryRow.tsx(5,15): error TS2305: Module '"../storage"' has no exported member 'StoryItem'.
+src/components/StoryViewer.tsx(5,15): error TS2305: Module '"../storage"' has no exported member 'StoryItem'.

@@ -1,27 +1,41 @@
-// src/translate/types.ts
-export type LanguageCode = "es" | "en" | "de" | "ja" | "ru" | "zh";
+/**
+ * Mapa de códigos de idioma a sus nombres legibles.
+ *
+ * Cada clave es un código ISO 639‑1 (por ejemplo, `en`, `es`, `fr`) y el
+ * valor es el nombre del idioma en inglés.
+ */
+export interface LanguageMap {
+  /** Inglés */
+  en: string;
+  /** Español */
+  es: string;
+  /** Francés */
+  fr: string;
+  /** Alemán */
+  de: string;
+  /** Italiano */
+  it: string;
+  /** Portugués */
+  pt: string;
+  /** Otros códigos pueden añadirse según sea necesario */
+  [code: string]: string;
+}
 
-export type TranslateRequest = {
-  text: string;
-  targetLang: LanguageCode;
-  sourceLang?: LanguageCode | "auto";
-  mode?: "full" | "word_in_context";
-  tapped?: string;
-  window?: number | null;
-};
+/**
+ * Tipo que representa cualquier código de idioma presente en {@link LanguageMap}.
+ */
+export type LanguageCode = keyof LanguageMap;
 
-
-export type TranslateWordInContextRequest = {
-  fullText: string;
-  tappedTokenIndex: number;
-  sourceLang: import("../storage").LanguageCode;
-  targetLang: import("../storage").LanguageCode;
-};
-
-export type TranslateResponse = {
+/**
+ * Resultado de una operación de traducción.
+ */
+export interface TranslationResult {
+  /** Texto original antes de la traducción. */
+  originalText: string;
+  /** Texto traducido al idioma de destino. */
   translatedText: string;
+  /** Código del idioma de origen. */
+  sourceLang: LanguageCode;
+  /** Código del idioma de destino. */
   targetLang: LanguageCode;
-  sourceLang: LanguageCode | "auto";
-  tappedMeaning: string | null;
-  usedWindow: number | null;
-};
+}

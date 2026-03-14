@@ -1,50 +1,47 @@
-# Welcome to your Expo app 👋
+# Amistad App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## Description
+A friendly social matching application built with Expo and TypeScript.
 
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+## Setup
 ```bash
-npm run reset-project
+# Install dependencies
+npm install
+
+# Start the development server
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Scripts
+- `npm run lint` – Lint the project.
+- `npm run test` – Run the test suite.
+- `npm run build` – Build the production bundle.
+- `./scripts/type-check.sh "<commit-message>"` – Run TypeScript type checking and automatically commit if no errors are found.
 
-## Learn more
+## TypeScript Check
+To verify TypeScript types and automatically commit when there are no errors, run the following command:
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+./scripts/type-check.sh "Your commit message"
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+The script performs the following steps:
+1. Executes `tsc --noEmit` to type‑check the entire project.
+2. If **no TypeScript errors** are reported, it stages all changes, creates a commit using the provided message, and pushes the commit to the current branch.
+3. If **any TypeScript errors** are detected, the script aborts, prints the errors to the console, and **does not** create a commit.
 
-## Join the community
+### Parameters
+- **Commit message** (required): The message that will be used for the automatic commit when the type check passes.
 
-Join our community of developers creating universal apps.
+### Example
+```bash
+./scripts/type-check.sh "chore: type check passed"
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+> **Note:** Ensure that your working tree is clean (no uncommitted changes) and that you have the necessary Git permissions before running the script.
+
+## Contributing
+Please read the [CONTRIBUTING.md](CONTRIBUTING.md) guidelines before submitting pull requests.
+
+## License
+This project is licensed under the MIT License.

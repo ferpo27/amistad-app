@@ -1,13 +1,19 @@
 {
-<<<<<<< HEAD
-    "CodeGPT.apiKey": "OpenAI",
-    "git.ignoreLimitWarning": true
+  // Preferencias de importación para TypeScript
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.preferences.importModuleSpecifierEnding": "js",
+  // Preferencias de importación para JavaScript
+  "javascript.preferences.importModuleSpecifier": "relative",
+  "javascript.preferences.importModuleSpecifierEnding": "js",
+  // Mapeos de rutas que deben coincidir con los definidos en tsconfig.json
+  // Ejemplo: alias "@" que apunta a la carpeta src
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.preferences.importModuleSpecifierEnding": "js",
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.preferences.importModuleSpecifierEnding": "js",
+  // Si tu tsconfig.json tiene algo como:
+  // "paths": { "@/*": ["src/*"] }
+  // puedes reflejarlo aquí (VSCode permite comentarios en JSONC)
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.preferences.importModuleSpecifierEnding": "js"
 }
-=======
-  "editor.codeActionsOnSave": {
-    "source.fixAll": "explicit",
-    "source.organizeImports": "explicit",
-    "source.sortMembers": "explicit"
-  }
-}
->>>>>>> dacc985c8ab2c03662555b586c8ffca3395022d7

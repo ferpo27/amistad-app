@@ -1,6 +1,11 @@
 // src/translate/types.ts
 export type LanguageCode = "es" | "en" | "de" | "ja" | "ru" | "zh";
 
+export interface TranslationResult {
+  text: string;
+  language: LanguageCode;
+}
+
 export type TranslateRequest = {
   text: string;
   targetLang: LanguageCode;
@@ -16,4 +21,4 @@ export type TranslateResponse = {
   sourceLang: LanguageCode | "auto";
   tappedMeaning: string | null;
   usedWindow: number | null;
-}; 
+};

@@ -1,6 +1,6 @@
 import { View, TextInput, StyleSheet } from "react-native";
 import { useState } from "react";
-import { updateStory } from "../profileStore";
+import { updateStory } from "../storage/profileStore";
 
 type Props = {
   storyId: string;
