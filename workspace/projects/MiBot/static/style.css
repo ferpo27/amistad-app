@@ -1,0 +1,77 @@
+body {
+  /* Estilo de fuente y tamaño */
+  font-family: Arial, sans-serif;
+  font-size: 16px;
+  /* Color de fondo de la página */
+  background-color: #f2f2f2;
+}
+
+/* Estilo de encabezado */
+header {
+  /* Color de fondo del encabezado */
+  background-color: #333;
+  /* Color de texto del encabezado */
+  color: #fff;
+  /* Altura del encabezado */
+  height: 60px;
+  /* Alineación del texto */
+  text-align: center;
+  /* Paddings */
+  padding: 10px;
+}
+
+/* Estilo de navegación */
+nav {
+  /* Color de fondo de la navegación */
+  background-color: #444;
+  /* Color de texto de la navegación */
+  color: #fff;
+  /* Altura de la navegación */
+  height: 40px;
+  /* Alineación del texto */
+  text-align: center;
+  /* Paddings */
+  padding: 10px;
+}
+
+/* Estilo de contenido */
+main {
+  /* Ancho del contenido */
+  width: 80%;
+  /* Margen */
+  margin: 40px auto;
+  /* Sombra */
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  /* Paddings */
+  padding: 20px;
+  /* Fondo del contenido */
+  background-color: #fff;
+}
+
+/* Estilo de pie de página */
+footer {
+  /* Color de fondo del pie de página */
+  background-color: #333;
+  /* Color de texto del pie de página */
+  color: #fff;
+  /* Altura del pie de página */
+  height: 40px;
+  /* Alineación del texto */
+  text-align: center;
+  /* Paddings */
+  padding: 10px;
+}
+
+/* Media queries para dispositivos móviles */
+@media (max-width: 768px) {
+  main {
+    width: 90%;
+  }
+}
+
+/* Media queries para dispositivos tablet */
+@media (max-width: 1024px) {
+  main {
+    width: 80%;
+  }
+}

@@ -1,0 +1,91 @@
+body {
+  /* Establece el fondo de la página */
+  background-color: #f2f2f2;
+  /* Establece la fuente por defecto */
+  font-family: Arial, sans-serif;
+}
+
+header {
+  /* Establece el color de fondo del encabezado */
+  background-color: #333;
+  /* Establece el color del texto del encabezado */
+  color: #fff;
+  /* Establece el padding del encabezado */
+  padding: 20px;
+  /* Establece el texto en mayúsculas */
+  text-transform: uppercase;
+}
+
+header h1 {
+  /* Establece el tamaño de la fuente del título */
+  font-size: 24px;
+  /* Establece el margen del título */
+  margin: 0;
+}
+
+main {
+  /* Establece el ancho máximo del contenido */
+  max-width: 800px;
+  /* Establece el margen del contenido */
+  margin: 40px auto;
+  /* Establece el padding del contenido */
+  padding: 20px;
+  /* Establece el fondo del contenido */
+  background-color: #fff;
+  /* Establece la sombra del contenido */
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+main h2 {
+  /* Establece el tamaño de la fuente del subtítulo */
+  font-size: 18px;
+  /* Establece el margen del subtítulo */
+  margin-top: 0;
+}
+
+footer {
+  /* Establece el color de fondo del pie de página */
+  background-color: #333;
+  /* Establece el color del texto del pie de página */
+  color: #fff;
+  /* Establece el padding del pie de página */
+  padding: 10px;
+  /* Establece el texto en mayúsculas */
+  text-transform: uppercase;
+  /* Establece el texto alineado al centro */
+  text-align: center;
+}
+
+/* Estilos para los enlaces */
+a {
+  /* Establece el color de los enlaces */
+  color: #337ab7;
+  /* Establece el texto subrayado */
+  text-decoration: underline;
+}
+
+a:hover {
+  /* Establece el color de los enlaces al pasar el mouse */
+  color: #23527c;
+}
+
+/* Estilos para los botones */
+button {
+  /* Establece el color de fondo de los botones */
+  background-color: #337ab7;
+  /* Establece el color del texto de los botones */
+  color: #fff;
+  /* Establece el padding de los botones */
+  padding: 10px 20px;
+  /* Establece el borde de los botones */
+  border: none;
+  /* Establece el radio de los botones */
+  border-radius: 5px;
+  /* Establece la sombra de los botones */
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+button:hover {
+  /* Establece el color de fondo de los botones al pasar el mouse */
+  background-color: #23527c;
+}
