@@ -1,5 +1,1 @@
-{
-    "recommendations": [
-        "anthropic.claude-code"
-    ]
-}
+{ "recommendations": ["expo.vscode-expo-tools"] }

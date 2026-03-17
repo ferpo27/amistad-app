@@ -1,0 +1,62 @@
+import {useEffect, useMemo, useState} from 'react';
+import {autoTranslate} from '../translate/autoTranslate';
+import type {AutoTranslateOptions} from '../translate/types';
+
+type UseAutoTranslateResult = {
+  translatedText: string;
+  loading: boolean;
+  error: Error | null;
+};
+
+export function useAutoTranslate(
+  text: string,
+  options?: AutoTranslateOptions
+): UseAutoTranslateResult {
+  const [translatedText, setTranslatedText] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const translate = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await autoTranslate(text, options);
+        if (!cancelled) {
+          setTranslatedText(result);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err as Error);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    if (text) {
+      translate();
+    } else {
+      setTranslatedText('');
+      setLoading(false);
+      setError(null);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [text, JSON.stringify(options)]);
+
+  return useMemo(
+    () => ({
+      translatedText,
+      loading,
+      error,
+    }),
+    [translatedText, loading, error]
+  );
+}

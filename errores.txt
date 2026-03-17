@@ -1,12 +1,7 @@
-Need to install the following packages:
-tsc@2.0.4
-Ok to proceed? (y) 
-
-[41m                                                                               [0m
-[41m[37m                This is not the tsc command you are looking for                [0m
-[41m                                                                               [0m
-
-To get access to the TypeScript compiler, [34mtsc[0m, from the command line either:
-
-- Use [1mnpm install typescript[0m to first add TypeScript to your project [1mbefore[0m using npx
-- Use [1myarn[0m to avoid accidentally running code from un-installed packages
+src/hooks/useAuth.ts(139,27): error TS1005: '>' expected.
+src/hooks/useAuth.ts(139,32): error TS1005: ')' expected.
+src/hooks/useAuth.ts(139,34): error TS1136: Property assignment expected.
+src/hooks/useAuth.ts(139,81): error TS1005: ',' expected.
+src/hooks/useAuth.ts(141,6): error TS1161: Unterminated regular expression literal.
+src/hooks/useAuth.ts(142,3): error TS1128: Declaration or statement expected.
+src/hooks/useAuth.ts(143,1): error TS1128: Declaration or statement expected.
