@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { isAuthOk, isOnboardingDone } from '../src/storage';
+import { supabase } from '../src/lib/supabase';
 
 export default function Index() {
   const router = useRouter();
