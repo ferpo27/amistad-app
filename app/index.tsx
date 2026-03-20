@@ -2,7 +2,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { isAuthOk, isOnboardingDone } from '../src/storage';
-import { supabase } from '../src/lib/supabase';
 
 export default function Index() {
   const router = useRouter();
@@ -11,7 +10,7 @@ export default function Index() {
     (async () => {
       const auth = await isAuthOk();
       if (!auth) {
-        router.replace('/(auth)/login');
+        router.replace('/landing');
         return;
       }
       const onboarded = await isOnboardingDone();
@@ -21,7 +20,7 @@ export default function Index() {
       }
       router.replace('/(tabs)/home');
     })();
-  }, []);
+  }, [router]);
 
   return null;
 }

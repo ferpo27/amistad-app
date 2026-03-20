@@ -1,13 +1,22 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const { supabaseUrl, supabaseAnonKey } = Constants.expoConfig?.extra || {};
 
 if (!supabaseUrl) {
-  throw new Error('Missing EXPO_PUBLIC_SUPABASE_URL environment variable');
+  throw new Error('Missing supabaseUrl in app config extra');
 }
 if (!supabaseAnonKey) {
-  throw new Error('Missing EXPO_PUBLIC_SUPABASE_ANON_KEY environment variable');
+  throw new Error('Missing supabaseAnonKey in app config extra');
 }
 
-export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase: SupabaseClient = createClient(
+  supabaseUrl as string,
+  supabaseAnonKey as string,
+  {
+    auth: {
+      storage: AsyncStorage,
+    },
+  }
+);
