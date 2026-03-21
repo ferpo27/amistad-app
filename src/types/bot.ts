@@ -13,3 +13,5 @@ export type BotResponse = {
   text: string; 
   [key: string]: any 
 }
+
+export default BotResponse;

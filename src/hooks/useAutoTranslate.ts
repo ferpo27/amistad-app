@@ -1,4 +1,3 @@
-import { useEffect, useMemo, useState } from 'react';
 import { translateText } from '../translate/autoTranslate';
 type AutoTranslateOptions = { from?: string; to: string }
 
@@ -51,12 +50,9 @@ export function useAutoTranslate(
     };
   }, [text, JSON.stringify(options)]);
 
-  return useMemo(
-    () => ({
-      translatedText,
-      loading,
-      error,
-    }),
-    [translatedText, loading, error]
-  );
+  return {
+    translatedText,
+    loading,
+    error,
+  };
 }

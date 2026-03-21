@@ -16,7 +16,7 @@ export default function StoryComposer({ storyId }: Props) {
     }
     setSaving(true);
     try {
-      await story.updateStory(storyId, { caption: text });
+      await story.saveStory(storyId, { caption: text });
     } catch (error) {
       console.error("Error al guardar la historia:", error);
       Alert.alert("Error", "No se pudo guardar la descripción. Por favor, inténtalo de nuevo.");
