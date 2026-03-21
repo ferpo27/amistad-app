@@ -1,3 +1,4 @@
+import { useState } from 'react';
 const theme = {
   colors: {
     primary: '#1976d2',
@@ -35,3 +36,25 @@ const theme = {
 };
 
 export default theme;
+
+export const useThemeMode = () => {
+  const [mode, setMode] = useState('light');
+  const toggleMode = () => {
+    setMode(mode === 'light' ? 'dark' : 'light');
+  };
+  return { mode, toggleMode };
+};
+
+export const useTheme = () => {
+  const { mode } = useThemeMode();
+  return { ...theme, mode };
+};
+
+export const ThemeProvider = ({ children }) => {
+  const { mode } = useThemeMode();
+  return (
+    <div style={{ backgroundColor: mode === 'light' ? theme.colors.background : '#333' }}>
+      {children}
+    </div>
+  );
+};

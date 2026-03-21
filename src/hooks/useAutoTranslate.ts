@@ -1,6 +1,6 @@
 import {useEffect, useMemo, useState} from 'react';
-import {autoTranslate} from '../translate/autoTranslate';
-import type {AutoTranslateOptions} from '../translate/types';
+import {autoTranslate} from '../../utils/translate/autoTranslate';
+import type {AutoTranslateOptions} from '../../utils/translate/types';
 
 type UseAutoTranslateResult = {
   translatedText: string;

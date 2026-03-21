@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import fetch, { RequestInit } from 'node-fetch';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type TokenPair = {
@@ -44,20 +44,17 @@ async function clearTokens(): Promise<void> {
 
 class ApiService {
   private static instance: ApiService;
-  private axiosInstance: AxiosInstance;
+  private fetchInstance: (url: string, init: RequestInit) => Promise<any>;
 
   private constructor() {
     const baseURL = process.env.API_BASE_URL ?? '';
-    this.axiosInstance = axios.create({
-      baseURL,
-      timeout: 15000,
-    });
+    this.fetchInstance = async (url: string, init: RequestInit) => {
+      const response = await fetch(`${baseURL}${url}`, init);
+      return response.json();
+    };
 
-    this.axiosInstance.interceptors.request.use(this.attachAuthHeader);
-    this.axiosInstance.interceptors.response.use(
-      (response) => response,
-      this.handleResponseError,
-    );
+    this.attachAuthHeader();
+    this.handleResponseError();
   }
 
   static getInstance(): ApiService {
@@ -67,32 +64,44 @@ class ApiService {
     return ApiService.instance;
   }
 
-  private attachAuthHeader = async (config: AxiosRequestConfig): Promise<AxiosRequestConfig> => {
+  private attachAuthHeader = async () => {
     const { accessToken } = await getTokens();
-    if (accessToken && config.headers) {
-      config.headers.Authorization = `Bearer ${accessToken}`;
+    if (accessToken) {
+      this.fetchInstance = async (url: string, init: RequestInit) => {
+        init.headers = {
+          ...init.headers,
+          Authorization: `Bearer ${accessToken}`,
+        };
+        return await this.fetchInstance(url, init);
+      };
     }
-    return config;
   };
 
-  private handleResponseError = async (error: any): Promise<AxiosResponse | Promise<never>> => {
-    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
-    if (error.response && error.response.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      const refreshed = await this.refreshAccessToken();
-      if (refreshed) {
-        if (originalRequest.headers) {
-          originalRequest.headers.Authorization = `Bearer ${refreshed}`;
+  private handleResponseError = async () => {
+    const originalFetchInstance = this.fetchInstance;
+    this.fetchInstance = async (url: string, init: RequestInit) => {
+      try {
+        const response = await originalFetchInstance(url, init);
+        if (response.status === 401) {
+          const refreshed = await this.refreshAccessToken();
+          if (refreshed) {
+            init.headers = {
+              ...init.headers,
+              Authorization: `Bearer ${refreshed}`,
+            };
+            return await this.fetchInstance(url, init);
+          }
         }
-        return this.axiosInstance(originalRequest);
+        return response;
+      } catch (error: any) {
+        const apiError: ApiError = {
+          status: error.status ?? 0,
+          data: error.data,
+          message: error.message,
+        };
+        throw apiError;
       }
-    }
-    const apiError: ApiError = {
-      status: error.response?.status ?? 0,
-      data: error.response?.data,
-      message: error.message,
     };
-    return Promise.reject(apiError);
   };
 
   private refreshAccessToken = async (): Promise<string | null> => {
@@ -102,39 +111,41 @@ class ApiService {
       return null;
     }
     try {
-      const response = await axios.post(
-        `${process.env.API_BASE_URL ?? ''}/auth/refresh`,
-        { refreshToken },
-      );
-      const { accessToken: newAccess, refreshToken: newRefresh } = response.data;
-      await setTokens(newAccess, newRefresh);
-      return newAccess;
-    } catch {
+      const response = await fetch(`${process.env.API_BASE_URL ?? ''}/refresh-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+      const data = await response.json();
+      await setTokens(data.accessToken, data.refreshToken);
+      return data.accessToken;
+    } catch (error) {
       await clearTokens();
       return null;
     }
   };
 
-  async get<T>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    const response = await this.axiosInstance.get<T>(url, config);
-    return { data: response.data, status: response.status };
+  public async get<T>(url: string, init: RequestInit = {}): Promise<ApiResponse<T>> {
+    const response = await this.fetchInstance(url, init);
+    return { data: response, status: 200 };
   }
 
-  async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    const response = await this.axiosInstance.post<T>(url, data, config);
-    return { data: response.data, status: response.status };
+  public async post<T>(url: string, data: any, init: RequestInit = {}): Promise<ApiResponse<T>> {
+    const response = await this.fetchInstance(url, { ...init, method: 'POST', body: JSON.stringify(data) });
+    return { data: response, status: 200 };
   }
 
-  async put<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    const response = await this.axiosInstance.put<T>(url, data, config);
-    return { data: response.data, status: response.status };
+  public async put<T>(url: string, data: any, init: RequestInit = {}): Promise<ApiResponse<T>> {
+    const response = await this.fetchInstance(url, { ...init, method: 'PUT', body: JSON.stringify(data) });
+    return { data: response, status: 200 };
   }
 
-  async delete<T>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    const response = await this.axiosInstance.delete<T>(url, config);
-    return { data: response.data, status: response.status };
+  public async delete<T>(url: string, init: RequestInit = {}): Promise<ApiResponse<T>> {
+    const response = await this.fetchInstance(url, { ...init, method: 'DELETE' });
+    return { data: response, status: 200 };
   }
 }
 
-export const api = ApiService.getInstance();
-export type { ApiResponse, ApiError };
+export default ApiService;
