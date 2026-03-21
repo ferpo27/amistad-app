@@ -44,9 +44,9 @@ async function googleTranslate(
       resolveIso(tgt) +
       "&dt=t&q=" +
       encodeURIComponent(q);
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 6000);
-    const res = await fetch(url, { signal: ctrl.signal });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(url, { signal: controller.signal as unknown as RequestInit['signal'] });
     clearTimeout(timer);
     if (!res.ok) return null;
     const data = await res.json();
@@ -77,9 +77,9 @@ async function myMemoryTranslate(
       encodeURIComponent(q) +
       "&langpair=" +
       encodeURIComponent(langPair);
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 6000);
-    const res = await fetch(url, { signal: ctrl.signal });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(url, { signal: controller.signal as unknown as RequestInit['signal'] });
     clearTimeout(timer);
     if (!res.ok) return null;
     const data = (await res.json()) as {
@@ -108,16 +108,13 @@ async function translateRaw(
   text: string,
   src: LanguageCode | "auto",
   tgt: LanguageCode
-): Promise<string> {
-  const raw = cleanText(text);
-  if (!raw) return raw;
-  if (src !== "auto" && src === tgt) return raw;
-  const cached = _cache.get(cKey(raw, resolveIso(src), resolveIso(tgt)));
-  if (cached) return cached;
-  const translated = await googleTranslate(raw, src, tgt) ?? await myMemoryTranslate(raw, src, tgt);
-  if (translated) {
-    _cache.set(cKey(raw, resolveIso(src), resolveIso(tgt)), translated);
-    return translated;
+): Promise<string | null> {
+  const key = cKey(text, resolveIso(src), resolveIso(tgt));
+  if (_cache.has(key)) return _cache.get(key) ?? null;
+  const result = await googleTranslate(text, src, tgt);
+  if (result) {
+    _cache.set(key, result);
+    return result;
   }
-  return raw;
+  return myMemoryTranslate(text, src, tgt);
 }

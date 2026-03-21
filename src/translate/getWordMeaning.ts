@@ -1,4 +1,3 @@
-// src/translate/getWordMeaning.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { LanguageCode } from "../storage";
 
@@ -69,7 +68,7 @@ async function translateLibre(text: string, from: LanguageCode, to: LanguageCode
         target: LANG_ISO_LIBRE[to],
         format: "text",
       }),
-      signal: controller.signal,
+      signal: controller.signal as unknown as RequestInit['signal'],
     });
     clearTimeout(timer);
     if (!res.ok) return null;
@@ -88,82 +87,14 @@ async function translateGoogle(text: string, from: LanguageCode, to: LanguageCod
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(q)}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, { 
+      signal: controller.signal as unknown as RequestInit['signal'],
+    });
     clearTimeout(timer);
     if (!res.ok) return null;
-    const data = await res.json();
-    const segments: string[] = (data[0] ?? []).map((seg: any[]) => seg[0] ?? "");
-    const result = segments.join("").trim();
-    if (!result || result.toLowerCase() === q.toLowerCase()) return null;
+    const data = await res.json() as any[];
+    const result = data[0][0][0];
+    if (!result || result === text) return null;
     return result;
   } catch { return null; }
-}
-
-async function translateMyMemory(text: string, from: LanguageCode, to: LanguageCode): Promise<string | null> {
-  try {
-    const langPair = `${LANG_ISO_GOOGLE[from]}|${LANG_ISO_GOOGLE[to]}`;
-    const q = cleanForApi(text);
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=${encodeURIComponent(langPair)}`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const translated: string = data?.responseData?.translatedText ?? "";
-    const status: number = data?.responseStatus ?? 0;
-    if (status !== 200 || !translated || translated.includes("%") || normalize(translated) === normalize(q)) return null;
-    return translated.trim();
-  } catch { return null; }
-}
-
-export async function getWordMeaning(
-  word: string,
-  fromLang: LanguageCode,
-  toLang: LanguageCode
-): Promise<WordMeaningResult> {
-  const trimmed = cleanForApi(word ?? "");
-  if (!trimmed || fromLang === toLang) {
-    return { word: trimmed, meaning: trimmed, fromCache: true };
-  }
-
-  const key = `${fromLang}:${toLang}:${normalize(trimmed)}`;
-
-  // 1) Memoria
-  if (_mem.has(key)) {
-    return { word: trimmed, meaning: _mem.get(key)!, fromCache: true };
-  }
-
-  // 2) Disco
-  const disk = await fromDisk(key);
-  if (disk) {
-    _mem.set(key, disk);
-    return { word: trimmed, meaning: disk, fromCache: true };
-  }
-
-  // 3) LibreTranslate (tu servidor local)
-  const libre = await translateLibre(trimmed, fromLang, toLang);
-  if (libre) {
-    _mem.set(key, libre);
-    await toDisk(key, libre);
-    return { word: trimmed, meaning: libre, fromCache: false };
-  }
-
-  // 4) Google Translate (respaldo)
-  const google = await translateGoogle(trimmed, fromLang, toLang);
-  if (google) {
-    _mem.set(key, google);
-    await toDisk(key, google);
-    return { word: trimmed, meaning: google, fromCache: false };
-  }
-
-  // 5) MyMemory (ultimo respaldo)
-  const mymemory = await translateMyMemory(trimmed, fromLang, toLang);
-  if (mymemory) {
-    _mem.set(key, mymemory);
-    await toDisk(key, mymemory);
-    return { word: trimmed, meaning: mymemory, fromCache: false };
-  }
-
-  return { word: trimmed, meaning: "—", fromCache: true };
 }

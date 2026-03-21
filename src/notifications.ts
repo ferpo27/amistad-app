@@ -20,6 +20,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -110,8 +112,8 @@ export async function sendPushNotification(
       body: JSON.stringify(message),
     });
 
-    const result = await response.json();
-    console.log(result);
+    const jsonData = await response.json();
+    console.log(jsonData);
   } catch (error) {
     console.error('Error sending push notification:', error);
   }

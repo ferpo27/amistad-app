@@ -15,7 +15,8 @@ async function translateWithRailway(text: string, from: LanguageCode, to: Langua
     });
     if (!res.ok) return null;
     const data = await res.json();
-    return (data?.translated as string) || null;
+    const result = data as any;
+    return result?.translated || null;
   } catch { return null; }
 }
 
@@ -25,7 +26,8 @@ async function translateWithMyMemory(text: string, from: LanguageCode, to: Langu
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
-    const translated = data?.responseData?.translatedText as string;
+    const result = data as any;
+    const translated = result?.responseData?.translatedText;
     if (!translated || translated === text) return null;
     return translated;
   } catch { return null; }
