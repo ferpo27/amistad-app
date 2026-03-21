@@ -7,3 +7,9 @@ interface Bot {
 }
 
 export default Bot;
+
+export type BotResponse = { 
+  id: string; 
+  text: string; 
+  [key: string]: any 
+}

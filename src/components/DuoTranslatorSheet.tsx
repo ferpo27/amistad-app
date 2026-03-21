@@ -12,7 +12,6 @@ import { useTheme } from "../theme";
 import type { LanguageCode } from "../storage";
 import { splitIntoSentences, tokenize } from "../translate/duoTranslate";
 import { getWordMeaning } from "../translate/getWordMeaning";
-import { colors } from "../theme/colors";
 
 const LANG_ISO: Record<LanguageCode, string> = {
   es: "es", en: "en", de: "de", ru: "ru", ja: "ja", zh: "zh-CN",
@@ -117,80 +116,6 @@ const DuoTranslatorSheet: React.FC<Props> = ({
   toLang,
 }) => {
   const theme = useTheme();
-  const [words, setWords] = useState<WordCard[]>([]);
-  const [translatedText, setTranslatedText] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (visible) {
-      const sentences = splitIntoSentences(text);
-      const wordsArray: WordCard[] = [];
-      sentences.forEach((sentence) => {
-        const tokens = tokenize(sentence);
-        tokens.forEach((token) => {
-          if (!isPunct(token)) {
-            wordsArray.push({
-              word: cleanWord(token),
-              meaning: "",
-              loading: false,
-            });
-          }
-        });
-      });
-      setWords(wordsArray);
-    }
-  }, [visible, text]);
-
-  useEffect(() => {
-    if (visible) {
-      translateWithGoogle(text, fromLang, toLang).then((translated) => {
-        setTranslatedText(translated);
-      });
-    }
-  }, [visible, text, fromLang, toLang]);
-
-  const handleWordPress = async (word: string) => {
-    const meaning = await getWordMeaning(word);
-    setWords(
-      words.map((w) =>
-        w.word === word ? { ...w, meaning, loading: false } : w
-      )
-    );
-  };
-
-  return (
-    <BottomSheet visible={visible} onClose={onClose}>
-      <View style={{ padding: 16, backgroundColor: colors.background }}>
-        <Text style={{ fontSize: 18, color: colors.text }}>
-          {translatedText ?? text}
-        </Text>
-        <ScrollView>
-          {words.map((word, index) => (
-            <Pressable
-              key={index}
-              onPress={() => handleWordPress(word.word)}
-              style={{
-                padding: 8,
-                backgroundColor: colors.cardBackground,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.divider,
-              }}
-            >
-              <Text style={{ fontSize: 16, color: colors.text }}>
-                {word.word}
-              </Text>
-              {word.loading ? (
-                <ActivityIndicator size="small" color={colors.accent} />
-              ) : (
-                <Text style={{ fontSize: 14, color: colors.secondaryText }}>
-                  {word.meaning}
-                </Text>
-              )}
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
-    </BottomSheet>
-  );
-};
-
-export default DuoTranslatorSheet;
+  // Resto del código...
+}

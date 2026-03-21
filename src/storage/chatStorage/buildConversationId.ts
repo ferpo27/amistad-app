@@ -5,16 +5,17 @@ const supabase: SupabaseClient = new SupabaseClient(
   process.env.SUPABASE_KEY
 );
 
-export function buildConversationId(userId: string, friendId: string): string {
+export async function buildConversationId(userId: string, friendId: string): Promise<{ data: any, error: any }> {
   const conversationId = `${userId}_${friendId}`;
-  const { data, error } = supabase
+  const { data, error } = await supabase
     .from('conversations')
     .insert({ id: conversationId, users: [userId, friendId] })
-    .select('id');
+    .select('id')
+    .single();
 
   if (error) {
     throw new Error(`Error creating conversation ID: ${error.message}`);
   }
 
-  return conversationId;
+  return { data, error };
 }

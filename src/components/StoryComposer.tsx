@@ -1,7 +1,6 @@
 import { View, TextInput, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { useState } from "react";
-import { updateStory } from "../storage/story";
-import { colors } from "../constants/colors";
+import { story } from "../storage/story";
 
 type Props = {
   storyId: string;
@@ -17,7 +16,7 @@ export default function StoryComposer({ storyId }: Props) {
     }
     setSaving(true);
     try {
-      await updateStory(storyId, { caption: text });
+      await story.updateStory(storyId, { caption: text });
     } catch (error) {
       console.error("Error al guardar la historia:", error);
       Alert.alert("Error", "No se pudo guardar la descripción. Por favor, inténtalo de nuevo.");
@@ -45,11 +44,11 @@ const styles = StyleSheet.create({
   container: { padding: 10 },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#ccc',
     borderRadius: 8,
     padding: 10,
-    backgroundColor: colors.background,
-    color: colors.text,
+    backgroundColor: '#fff',
+    color: '#000',
   },
   loader: {
     marginTop: 8,

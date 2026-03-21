@@ -1,1 +1,1 @@
-export * from "./storage/profileStore";
+export * from "./storage/profilesStorage";

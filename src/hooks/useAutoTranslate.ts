@@ -1,6 +1,6 @@
-import {useEffect, useMemo, useState} from 'react';
-import {autoTranslate} from '../../utils/translate/autoTranslate';
-import type {AutoTranslateOptions} from '../../utils/translate/types';
+import { useEffect, useMemo, useState } from 'react';
+import { translateText } from '../translate/autoTranslate';
+type AutoTranslateOptions = { from?: string; to: string }
 
 type UseAutoTranslateResult = {
   translatedText: string;
@@ -23,7 +23,7 @@ export function useAutoTranslate(
       setLoading(true);
       setError(null);
       try {
-        const result = await autoTranslate(text, options);
+        const result = await translateText(text, options);
         if (!cancelled) {
           setTranslatedText(result);
         }

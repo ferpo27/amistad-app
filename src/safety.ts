@@ -75,10 +75,11 @@ export const isBlocked = async (userId: string): Promise<boolean> => {
  * Obtiene la lista de usuarios bloqueados.
  * @returns Array de IDs de usuarios bloqueados.
  */
-export const getBlockedList = async (): Promise<BlockedListType[]> => {
+type BlockedListType = string[];
+export const getBlockedList = async (): Promise<BlockedListType> => {
   try {
     const stored = await AsyncStorage.getItem('blockedList');
-    const blocked: BlockedListType[] = stored ? JSON.parse(stored) : [];
+    const blocked: BlockedListType = stored ? JSON.parse(stored) : [];
     return blocked;
   } catch (err) {
     console.error('Error al obtener la lista de bloqueados:', err);

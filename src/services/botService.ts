@@ -1,4 +1,4 @@
-import { BotResponse } from "../types/bot";
+import BotResponse from "../types/bot";
 
 export async function getBotResponse(message: string): Promise<string> {
   const apiUrl = process.env.BOT_API_URL;
