@@ -1,4 +1,5 @@
 import { useState } from 'react';
+
 const theme = {
   colors: {
     primary: '#1976d2',
@@ -50,11 +51,4 @@ export const useTheme = () => {
   return { ...theme, mode };
 };
 
-export const ThemeProvider = ({ children }) => {
-  const { mode } = useThemeMode();
-  return (
-    <div style={{ backgroundColor: mode === 'light' ? theme.colors.background : '#333' }}>
-      {children}
-    </div>
-  );
-};
+export const ThemeProvider = ({ children }: { children: any }) => children;
