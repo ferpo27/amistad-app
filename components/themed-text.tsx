@@ -53,8 +53,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   link: {
+    fontSize: 14,
     lineHeight: 30,
-    fontSize: 16,
     color: '#0a7ea4',
   },
 });

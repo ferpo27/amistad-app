@@ -1,4 +1,6 @@
-import { translateText } from '../translate/autoTranslate';
+import { useState, useEffect } from 'react';
+import { autoTranslate } from '../translate/autoTranslate';
+
 type AutoTranslateOptions = { from?: string; to: string }
 
 type UseAutoTranslateResult = {
@@ -22,9 +24,10 @@ export function useAutoTranslate(
       setLoading(true);
       setError(null);
       try {
-        const result = await translateText(text, options);
+        const result = await autoTranslate(text, options);
         if (!cancelled) {
-          setTranslatedText(result);
+          const traducción: string = result;
+          setTranslatedText(traducción);
         }
       } catch (err) {
         if (!cancelled) {

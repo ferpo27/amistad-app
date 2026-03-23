@@ -39,6 +39,7 @@ export default function TypingIndicator() {
     />
   );
 
+  const texto: string = '';
   return (
     <View
       style={{

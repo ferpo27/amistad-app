@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './lib/supabase';
-import type { BlockedListType } from './types';
+
+type BlockedListType = string[];
 
 enum ReportReason {
   SPAM = 'spam',
@@ -75,7 +76,6 @@ export const isBlocked = async (userId: string): Promise<boolean> => {
  * Obtiene la lista de usuarios bloqueados.
  * @returns Array de IDs de usuarios bloqueados.
  */
-type BlockedListType = string[];
 export const getBlockedList = async (): Promise<BlockedListType> => {
   try {
     const stored = await AsyncStorage.getItem('blockedList');

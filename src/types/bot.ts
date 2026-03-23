@@ -6,12 +6,9 @@ interface Bot {
   updatedAt: Date;
 }
 
-export default Bot;
-
 export type BotResponse = { 
   id: string; 
   text: string; 
+  reply: string;
   [key: string]: any 
 }
-
-export default BotResponse;
