@@ -25,7 +25,7 @@ export default function ParallaxScrollView({
 }: Props) {
   const backgroundColor = useThemeColor({}, 'background');
   const colorScheme = useColorScheme() ?? 'light';
-  const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const scrollRef = useAnimatedRef<Animated.FlatList>();
   const scrollOffset = useScrollOffset(scrollRef);
   const headerAnimatedStyle = useAnimatedStyle(() => {
     return {
@@ -45,21 +45,29 @@ export default function ParallaxScrollView({
   });
 
   return (
-    <Animated.ScrollView
+    <Animated.FlatList
       ref={scrollRef}
       style={{ backgroundColor, flex: 1 }}
-      scrollEventThrottle={16}>
-      <Animated.View
-        style={[
-          styles.header,
-          { backgroundColor: headerBackgroundColor[colorScheme] },
-          headerAnimatedStyle,
-          { overflow: 'hidden' }, // Agregado para evitar errores de renderizado
-        ]}>
-        {headerImage}
-      </Animated.View>
-      <ThemedView style={styles.content}>{children}</ThemedView>
-    </Animated.ScrollView>
+      scrollEventThrottle={16}
+      data={[{ key: 'header' }, { key: 'content' }]}
+      renderItem={({ item }) => {
+        if (item.key === 'header') {
+          return (
+            <Animated.View
+              style={[
+                styles.header,
+                { backgroundColor: headerBackgroundColor[colorScheme] },
+                headerAnimatedStyle,
+                { overflow: 'hidden' }, // Agregado para evitar errores de renderizado
+              ]}>
+              {headerImage}
+            </Animated.View>
+          );
+        } else {
+          return <ThemedView style={styles.content}>{children}</ThemedView>;
+        }
+      }}
+    />
   );
 }
 

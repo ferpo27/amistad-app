@@ -96,3 +96,15 @@ if (jestSetup) {
     jestSetup.clearAllMocks();
   });
 }
+
+// Agregar configuración para cubrimiento de código
+jestSetup.configure({
+  coverageThreshold: {
+    global: {
+      branches: 90,
+      functions: 90,
+      lines: 90,
+      statements: 90,
+    },
+  },
+});

@@ -37,7 +37,7 @@ export function ThemedText({
 
 const styles = StyleSheet.create({
   default: {
-    fontSize: 16,
+    fontSize: 18,
     lineHeight: 24,
   },
   defaultSemiBold: {
@@ -58,5 +58,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 30,
     color: '#0a7ea4',
+    textDecorationLine: 'underline',
   },
 });
