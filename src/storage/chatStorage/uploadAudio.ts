@@ -1,16 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-const supabaseSecret = process.env.SUPABASE_SECRET;
+const supabaseUrl = process.env.SUPABASE_URL!;
+const supabaseKey = process.env.SUPABASE_KEY!;
 
-const supabase = createClient(supabaseUrl, supabaseKey, supabaseSecret);
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function uploadAudio(audio: File): Promise<string> {
   try {
     const { data, error } = await supabase.storage
       .from('audios')
-      .upload(audio, {
+      .upload(audio.name, audio, {
         upsert: true,
       });
 
@@ -18,7 +17,7 @@ async function uploadAudio(audio: File): Promise<string> {
       throw error;
     }
 
-    return data.publicUrl;
+    return data.path;
   } catch (error) {
     console.error(error);
     throw error;

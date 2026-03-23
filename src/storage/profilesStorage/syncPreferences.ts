@@ -2,9 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://tu-supabase-url.supabase.co';
 const supabaseKey = 'tu-supabase-key';
-const supabaseSecret = 'tu-supabase-secret';
 
-const supabase = createClient(supabaseUrl, supabaseKey, supabaseSecret);
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function syncPreferences(profileId: string, preferences: any) {
   try {
