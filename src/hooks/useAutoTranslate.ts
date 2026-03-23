@@ -1,4 +1,3 @@
-```typescript
 import { useState, useEffect } from 'react';
 import { autoTranslate } from '../translate/autoTranslate';
 
@@ -21,7 +20,7 @@ export function useAutoTranslate(
   useEffect(() => {
     let cancelled = false;
 
-    const translate = async () => {
+    const useAutoTranslate = async () => {
       setLoading(true);
       setError(null);
       try {
@@ -40,8 +39,8 @@ export function useAutoTranslate(
       }
     };
 
-    if (text && options) {
-      translate();
+    if (text && options && options.to) {
+      useAutoTranslate();
     } else {
       setTranslatedText('');
       setLoading(false);
@@ -59,4 +58,3 @@ export function useAutoTranslate(
     error,
   };
 }
-```

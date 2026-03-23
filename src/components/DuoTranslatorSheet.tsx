@@ -119,8 +119,14 @@ const DuoTranslatorSheet: React.FC<Props> = ({
   const theme = useTheme();
 
   return (
-    <View style={styles.container}>
-      {/* Resto del código... */}
+    <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
+      <ScrollView style={styles.scrollView}>
+        <Text style={styles.text}>{text}</Text>
+        <ActivityIndicator size="large" color={theme.color} />
+        <Pressable style={styles.pressable} onPress={onClose}>
+          <Text style={styles.text}>Cerrar</Text>
+        </Pressable>
+      </ScrollView>
     </View>
   );
 };
@@ -128,6 +134,18 @@ const DuoTranslatorSheet: React.FC<Props> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 20,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  text: {
+    fontSize: 18,
+    marginBottom: 10,
+  },
+  pressable: {
+    padding: 10,
+    backgroundColor: theme.backgroundColor,
   },
 });
 

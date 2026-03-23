@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Animated, View } from "react-native";
 import { useThemeMode } from "../../theme";
 
@@ -8,6 +8,7 @@ export default function TypingIndicator() {
   const a1 = useRef(new Animated.Value(0.3)).current;
   const a2 = useRef(new Animated.Value(0.3)).current;
   const a3 = useRef(new Animated.Value(0.3)).current;
+  const [texto, setTexto] = useState('');
 
   useEffect(() => {
     const pulse = (v: Animated.Value, delay: number) =>
@@ -24,7 +25,9 @@ export default function TypingIndicator() {
     const l3 = pulse(a3, 240);
 
     l1.start(); l2.start(); l3.start();
-    return () => { l1.stop(); l2.stop(); l3.stop(); };
+    return () => {
+      l1.stop(); l2.stop(); l3.stop();
+    };
   }, [a1, a2, a3]);
 
   const Dot = ({ a }: { a: Animated.Value }) => (
@@ -40,7 +43,6 @@ export default function TypingIndicator() {
     />
   );
 
-  const texto: string = '';
   return (
     <View
       style={{
@@ -56,12 +58,23 @@ export default function TypingIndicator() {
       }}
     >
       {a1 && a2 && a3 ? (
-        <>
+        <>{
           <Dot a={a1} />
           <Dot a={a2} />
           <Dot a={a3} />
         </>
-      ) : null}
+      ) : (
+        <View
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: 999,
+            marginHorizontal: 3,
+            opacity: 0,
+            backgroundColor: colors.fg,
+          }}
+        />
+      )}
     </View>
   );
 }
