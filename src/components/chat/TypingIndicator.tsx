@@ -4,6 +4,7 @@ import { useThemeMode } from "../../theme";
 
 export default function TypingIndicator() {
   const { colors } = useThemeMode();
+  const typingIndicator = useRef(new Animated.Value(0.3)).current;
   const a1 = useRef(new Animated.Value(0.3)).current;
   const a2 = useRef(new Animated.Value(0.3)).current;
   const a3 = useRef(new Animated.Value(0.3)).current;
@@ -54,9 +55,13 @@ export default function TypingIndicator() {
         alignSelf: "flex-start",
       }}
     >
-      <Dot a={a1} />
-      <Dot a={a2} />
-      <Dot a={a3} />
+      {a1 && a2 && a3 ? (
+        <>
+          <Dot a={a1} />
+          <Dot a={a2} />
+          <Dot a={a3} />
+        </>
+      ) : null}
     </View>
   );
 }

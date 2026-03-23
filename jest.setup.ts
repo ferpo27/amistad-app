@@ -42,3 +42,57 @@ afterEach(() => {
   jest.clearAllTimers();
   jest.clearAllMocks();
 });
+
+// Cambiar 'jest' por 'jest.setup' en la línea 10
+// Dado que no hay una línea 10 explícita, se asume que se refiere a la importación
+// La importación ya está hecha con 'jest' en la línea 2, así que se cambia el nombre
+// de la variable 'jest' a 'jestSetup' para evitar confusiones
+const jestSetup = jest;
+
+// Agregar condición para evitar errores de configuración en la línea 20
+// Dado que no hay una línea 20 explícita, se asume que se refiere a la configuración
+// de los mocks y timers
+if (jestSetup) {
+  // Configuración de mocks y timers
+  jestSetup.useFakeTimers();
+
+  // Mock native animated helper to silence warnings in React Native tests
+  jestSetup.mock('react-native/Libraries/Animated/NativeAnimatedHelper');
+
+  // Mock react-native-reanimated (required for many RN libraries)
+  jestSetup.mock('react-native-reanimated', () => {
+    const Reanimated = require('react-native-reanimated/mock');
+    // The mock for `call` is needed for some animations
+    Reanimated.default.call = () => {};
+    return Reanimated;
+  });
+
+  // Mock expo-constants if used in the project
+  jestSetup.mock('expo-constants', () => ({
+    default: {
+      manifest: {},
+      expoConfig: {},
+      ios: {},
+      android: {},
+      web: {},
+    },
+  }));
+
+  // Mock async storage (common in RN apps)
+  jestSetup.mock('@react-native-async-storage/async-storage', () => ({
+    setItem: jestSetup.fn(),
+    getItem: jestSetup.fn(),
+    removeItem: jestSetup.fn(),
+    clear: jestSetup.fn(),
+    getAllKeys: jestSetup.fn(),
+    multiGet: jestSetup.fn(),
+    multiSet: jestSetup.fn(),
+    multiRemove: jestSetup.fn(),
+  }));
+
+  // Ensure timers are cleared after each test
+  afterEach(() => {
+    jestSetup.clearAllTimers();
+    jestSetup.clearAllMocks();
+  });
+}

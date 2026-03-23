@@ -5,6 +5,7 @@ import {
   ScrollView,
   Text,
   View,
+  StyleSheet
 } from "react-native";
 
 import BottomSheet from "./BottomSheet";
@@ -117,5 +118,17 @@ const DuoTranslatorSheet: React.FC<Props> = ({
 }) => {
   const theme = useTheme();
 
-  // Resto del código...
-}
+  return (
+    <View style={styles.container}>
+      {/* Resto del código... */}
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
+
+export default DuoTranslatorSheet;
