@@ -7,3 +7,8 @@ echo "Configurando Jest para pruebas unitarias..."
 jest --config jest.setup.ts
 
 echo "Configuración de Jest completada."
+
+# Agregar comando de configuración para el proyecto
+echo "Ejecutando comando de configuración para el proyecto..."
+npm run config
+echo "Comando de configuración ejecutado con éxito."
