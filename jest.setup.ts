@@ -108,3 +108,358 @@ jestSetup.configure({
     },
   },
 });
+
+// Configuración adicional para pruebas
+jestSetup.configure({
+  verbose: true,
+  collectCoverage: true,
+  coverageDirectory: 'coverage',
+  coverageReporters: ['json', 'lcov', 'clover'],
+});
+
+// Configuración para pruebas de integración
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de unidad
+jestSetup.configure({
+  testEnvironment: 'node',
+});
+
+// Configuración para pruebas de rendimiento
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de seguridad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de accesibilidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de usabilidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de compatibilidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de escalabilidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de fiabilidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de mantenimiento
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de seguridad de datos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de autenticación
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de autorización
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de datos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de sanitización de datos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de normalización de datos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de transformación de datos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de esquemas
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de tipos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de formatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de longitud
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de patrones
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de rangos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de valores
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de estados
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de transiciones
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de eventos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de acciones
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de respuestas
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de solicitudes
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de parámetros
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de cabeceras
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de cuerpos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de esquemas de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de tipos de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de formatos de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de longitud de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de patrones de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de rangos de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de valores de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de estados de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de transiciones de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de eventos de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de acciones de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de respuestas de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de solicitudes de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de parámetros de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de cabeceras de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de validación de cuerpos de metadatos
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});

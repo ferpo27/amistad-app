@@ -1,7 +1,11 @@
-import '../mock/matches';
+```typescript
+import { matches } from '../mock/matches';
+
 export function botReply(message: string): string {
   // Implementación de la función botReply
-  return message;
+  // Por ejemplo, podrías utilizar la variable matches para generar una respuesta
+  return `Respuesta a ${message}`;
 }
 
-export { botReply as getBotReply };
+export { botReply };
+```

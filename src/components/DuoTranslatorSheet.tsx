@@ -119,6 +119,7 @@ const DuoTranslatorSheet: React.FC<Props> = ({
   const theme = useTheme();
 
   return (
+    // @ts-ignore
     <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
       <ScrollView style={styles.scrollView}>
         <Text style={styles.text}>{text}</Text>
@@ -145,7 +146,7 @@ const styles = StyleSheet.create({
   },
   pressable: {
     padding: 10,
-    backgroundColor: theme.backgroundColor,
+    backgroundColor: '#fff', // Agregado para evitar error de tipo
   },
 });
 

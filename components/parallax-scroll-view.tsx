@@ -56,9 +56,9 @@ export default function ParallaxScrollView({
             <Animated.View
               style={[
                 styles.header,
-                { backgroundColor: headerBackgroundColor[colorScheme] },
+                { backgroundColor: headerBackgroundColor[colorScheme as keyof typeof headerBackgroundColor] },
                 headerAnimatedStyle,
-                { overflow: 'hidden' }, // Agregado para evitar errores de renderizado
+                { overflow: 'hidden' }, 
               ]}>
               {headerImage}
             </Animated.View>
