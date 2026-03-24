@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { translateText } from '../translate/autoTranslate';
 
-type AutoTranslateOptions = { from?: string; to: string }
+type AutoTranslateOptions = { 
+  from?: string; 
+  to: string 
+}
 
 type UseAutoTranslateResult = {
   translatedText: string;

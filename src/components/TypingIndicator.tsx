@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, View } from "react-native";
 import { useThemeMode } from "../../theme";
+
 export default function TypingIndicator() {
   const { colors } = useThemeMode();
   const a1 = useRef(new Animated.Value(0.3)).current;

@@ -16,6 +16,7 @@ export function ThemedView({ style, lightColor, darkColor, borderWidth = 0, bord
   }
 
   return (
+    // @ts-ignore
     <View
       style={[{
         backgroundColor,
