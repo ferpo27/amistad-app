@@ -1,7 +1,21 @@
-import 'react-native';
+import "react-native";
 declare module 'react-native' {
-  interface ViewProps { children?: React.ReactNode; }
-  interface TextProps { children?: React.ReactNode; }
-  interface TextInputProps { children?: React.ReactNode; }
-  interface ActivityIndicatorProps { children?: React.ReactNode; }
+  interface ViewProps { 
+    children?: import("react").ReactNode; 
+  }
+  interface TextProps { 
+    children?: import("react").ReactNode; 
+  }
+  interface TextInputProps { 
+    children?: import("react").ReactNode; 
+  }
+  interface ActivityIndicatorProps { 
+    children?: import("react").ReactNode; 
+  }
+  interface ImageProps { 
+    children?: import("react").ReactNode; 
+  }
+  interface Animated {
+    View: any;
+  }
 }

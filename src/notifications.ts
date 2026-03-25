@@ -1,4 +1,4 @@
-import * as Notifications from 'expo-notifications';
+﻿import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 
@@ -49,7 +49,6 @@ export async function registerForPush(): Promise<string | null> {
         name: 'Default',
         importance: Notifications.AndroidImportance.MAX,
         sound: 'default',
-        vibrate: [0, 250, 250, 250],
       });
     }
 

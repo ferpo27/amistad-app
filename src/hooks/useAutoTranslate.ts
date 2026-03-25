@@ -52,6 +52,8 @@ export function useAutoTranslate(
 
     return () => {
       cancelled = true;
+      // Agregar un console.log para ver que se está llamando correctamente
+      console.log('useAutoTranslate: Cancelar la traducción');
     };
   }, [text, JSON.stringify(options)]);
 

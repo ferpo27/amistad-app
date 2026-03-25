@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { Animated, View } from "react-native";
 import { useThemeMode } from "../../theme";
 
+const AnimatedView = Animated.View as any;
+
 export default function TypingIndicator() {
   const { colors } = useThemeMode();
   const a1 = useRef(new Animated.Value(0.3)).current;
@@ -26,7 +28,7 @@ export default function TypingIndicator() {
     };
   }, [a1, a2, a3]);
   const Dot = ({ a }: { a: Animated.Value }) => (
-    <Animated.View
+    <AnimatedView
       style={{
         width: 6,
         height: 6,
@@ -52,7 +54,7 @@ export default function TypingIndicator() {
       }}
     >
       {a1 && a2 && a3 ? (
-        <>
+        <>{
           <Dot a={a1} />
           <Dot a={a2} />
           <Dot a={a3} />

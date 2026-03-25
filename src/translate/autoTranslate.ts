@@ -1,4 +1,4 @@
-import type { LanguageCode, TranslateRequest, TranslateResponse } from "./types";
+﻿import type { LanguageCode, TranslateRequest, TranslateResponse } from "./types";
 
 const LANG_ISO: Record<LanguageCode, string> = {
   es: "es",
@@ -26,7 +26,7 @@ function cKey(text: string, src: string, tgt: string): string {
 
 function resolveIso(lang: LanguageCode | "auto" | undefined): string {
   if (!lang || lang === "auto") return "auto";
-  return LANG_ISO[lang] ?? lang;
+  return (LANG_ISO[lang] ?? lang) as string;
 }
 
 async function googleTranslate(
