@@ -1,6 +1,7 @@
 // src/storage/profilesStorage.ts
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { colors } from '../theme';
 
 export type RemoteProfile = {
   id: string;
@@ -58,3 +59,8 @@ export async function getProfileById(id: string): Promise<RemoteProfile | null> 
     return null;
   }
 }
+
+// Reemplazar colors.accentSoft por colors.accent + '33'
+// Sin embargo, en este archivo no se utiliza colors.accentSoft, por lo que no hay nada que reemplazar.
+// Si se necesitara utilizar colors.accentSoft en el futuro, se podría reemplazar de la siguiente manera:
+// const accentSoft = colors.accent + '33';
