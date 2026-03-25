@@ -68,3 +68,24 @@ export function endConversation(me: ProfileData, other: MatchProfile) {
   console.log(`Finalizando conversación entre ${me.name} y ${other.name}...`);
   return true;
 }
+
+// Función adicional para obtener el estado de la conexión
+export function getConnectionStatus(me: ProfileData, other: MatchProfile) {
+  // Lógica para obtener el estado de la conexión
+  console.log(`Obteniendo estado de la conexión entre ${me.name} y ${other.name}...`);
+  return true;
+}
+
+// Función adicional para enviar un mensaje de voz
+export function sendVoiceMessage(me: ProfileData, other: MatchProfile, message: string) {
+  // Lógica para enviar un mensaje de voz
+  console.log(`Enviando mensaje de voz de ${me.name} a ${other.name}: ${message}`);
+  return true;
+}
+
+// Función adicional para enviar un mensaje de imagen
+export function sendImageMessage(me: ProfileData, other: MatchProfile, image: string) {
+  // Lógica para enviar un mensaje de imagen
+  console.log(`Enviando mensaje de imagen de ${me.name} a ${other.name}: ${image}`);
+  return true;
+}

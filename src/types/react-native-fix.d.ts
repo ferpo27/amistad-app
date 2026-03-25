@@ -39,4 +39,19 @@ declare module 'react-native' {
   interface TouchableNativeFeedbackProps {
     children?: import("react").ReactNode;
   }
+  interface View {
+    props: ViewProps;
+  }
+  interface Text {
+    props: TextProps;
+  }
+  interface TextInput {
+    props: TextInputProps;
+  }
+  interface ActivityIndicator {
+    props: ActivityIndicatorProps;
+  }
+  interface Image {
+    props: ImageProps;
+  }
 }

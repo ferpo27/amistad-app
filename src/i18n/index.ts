@@ -1,31 +1,32 @@
 // src/i18n/index.ts
 
-// Implementación real de la función t
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+
+i18n
+  .use(initReactI18next)
+  .init({
+    lng: 'es-ES',
+    resources: {
+      'es-ES': {
+        translation: {
+          // Agregar traducciones aquí
+        }
+      }
+    }
+  });
+
 export const t = (key: string, options?: any): string => {
-  // Implementación real de la traducción
-  return `Traducción de ${key}`;
+  return i18n.t(key, options);
 };
 
-// Función para cambiar el idioma
 export const changeLanguage = (language: string): void => {
-  // Lógica para cambiar el idioma
-  console.log(`Idioma cambiado a ${language}`);
+  i18n.changeLanguage(language);
 };
 
-// Función para obtener el idioma actual
 export const getLanguage = (): string => {
-  // Lógica para obtener el idioma actual
-  return 'es-ES';
+  return i18n.language;
 };
 
-// Resto del código...
-export const translate = (key: string): string => {
-  // Implementación real de la traducción
-  return `Traducción de ${key}`;
-};
-
-// Función para agregar traducciones
-export const addTranslations = (translations: any): void => {
-  // Lógica para agregar traducciones
-  console.log('Traducciones agregadas');
-};
+// Eliminar funciones redundantes
+// ...
