@@ -89,3 +89,38 @@ export function sendImageMessage(me: ProfileData, other: MatchProfile, image: st
   console.log(`Enviando mensaje de imagen de ${me.name} a ${other.name}: ${image}`);
   return true;
 }
+
+// Función adicional para obtener la lista de mensajes
+export function getMessages(me: ProfileData, other: MatchProfile) {
+  // Lógica para obtener la lista de mensajes
+  console.log(`Obteniendo lista de mensajes entre ${me.name} y ${other.name}...`);
+  return [];
+}
+
+// Función adicional para obtener la lista de contactos
+export function getContacts(me: ProfileData) {
+  // Lógica para obtener la lista de contactos
+  console.log(`Obteniendo lista de contactos de ${me.name}...`);
+  return [];
+}
+
+// Función adicional para obtener la lista de grupos
+export function getGroups(me: ProfileData) {
+  // Lógica para obtener la lista de grupos
+  console.log(`Obteniendo lista de grupos de ${me.name}...`);
+  return [];
+}
+
+// Función adicional para unirse a un grupo
+export function joinGroup(me: ProfileData, groupId: string) {
+  // Lógica para unirse a un grupo
+  console.log(`Uniendo a ${me.name} al grupo ${groupId}...`);
+  return true;
+}
+
+// Función adicional para dejar un grupo
+export function leaveGroup(me: ProfileData, groupId: string) {
+  // Lógica para dejar un grupo
+  console.log(`Dejando a ${me.name} del grupo ${groupId}...`);
+  return true;
+}

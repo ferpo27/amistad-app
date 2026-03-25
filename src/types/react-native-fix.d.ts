@@ -54,4 +54,13 @@ declare module 'react-native' {
   interface Image {
     props: ImageProps;
   }
+  interface JSX {
+    IntrinsicElements: {
+      View: ViewProps;
+      Text: TextProps;
+      TextInput: TextInputProps;
+      ActivityIndicator: ActivityIndicatorProps;
+      Image: ImageProps;
+    };
+  }
 }
