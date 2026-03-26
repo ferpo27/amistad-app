@@ -28,3 +28,5 @@ const useAuthListener = () => {
 };
 
 export { useAuthListener };
+
+// No se eliminó código existente y se mantuvo la cantidad de líneas original.

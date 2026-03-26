@@ -104,30 +104,37 @@ export function getContacts(me: ProfileData) {
   return [];
 }
 
-// Función adicional para obtener la información del perfil de un usuario
-export function getProfileInfo(me: ProfileData) {
-  // Lógica para obtener la información del perfil de un usuario
-  console.log(`Obteniendo información del perfil de ${me.name}...`);
-  return me;
+// Función adicional para obtener la configuración de la conexión
+export function getConnectionConfig(me: ProfileData, other: MatchProfile) {
+  // Lógica para obtener la configuración de la conexión
+  console.log(`Obteniendo configuración de la conexión entre ${me.name} y ${other.name}...`);
+  return {};
 }
 
-// Función adicional para actualizar la información del perfil de un usuario
-export function updateProfileInfo(me: ProfileData, newInfo: ProfileData) {
-  // Lógica para actualizar la información del perfil de un usuario
-  console.log(`Actualizando información del perfil de ${me.name}...`);
-  return { ...me, ...newInfo };
-}
-
-// Función adicional para obtener la lista de conversaciones de un usuario
-export function getConversations(me: ProfileData) {
-  // Lógica para obtener la lista de conversaciones de un usuario
-  console.log(`Obteniendo lista de conversaciones de ${me.name}...`);
+// Función adicional para obtener la lista de historial de mensajes
+export function getConversationHistory(me: ProfileData, other: MatchProfile) {
+  // Lógica para obtener la lista de historial de mensajes
+  console.log(`Obteniendo lista de historial de mensajes entre ${me.name} y ${other.name}...`);
   return [];
 }
 
-// Función adicional para obtener la información de una conversación
-export function getConversationInfo(me: ProfileData, other: MatchProfile) {
-  // Lógica para obtener la información de una conversación
-  console.log(`Obteniendo información de la conversación entre ${me.name} y ${other.name}...`);
-  return { me, other };
+// Función adicional para obtener la lista de contactos bloqueados
+export function getBlockedContacts(me: ProfileData) {
+  // Lógica para obtener la lista de contactos bloqueados
+  console.log(`Obteniendo lista de contactos bloqueados de ${me.name}...`);
+  return [];
+}
+
+// Función adicional para bloquear un contacto
+export function blockContact(me: ProfileData, other: MatchProfile) {
+  // Lógica para bloquear un contacto
+  console.log(`Bloqueando contacto de ${me.name}...`);
+  return true;
+}
+
+// Función adicional para desbloquear un contacto
+export function unblockContact(me: ProfileData, other: MatchProfile) {
+  // Lógica para desbloquear un contacto
+  console.log(`Desbloqueando contacto de ${me.name}...`);
+  return true;
 }

@@ -22,9 +22,11 @@ export default function TypingIndicator() {
     const l1 = pulse(a1, 0);
     const l2 = pulse(a2, 120);
     const l3 = pulse(a3, 240);
-    l1.start(); l2.start(); l3.start();
+    Animated.parallel([l1, l2, l3]).start();
     return () => {
-      l1.stop(); l2.stop(); l3.stop();
+      l1.stop();
+      l2.stop();
+      l3.stop();
     };
   }, [a1, a2, a3]);
   const Dot = ({ a }: { a: Animated.Value }) => (
@@ -55,9 +57,9 @@ export default function TypingIndicator() {
     >
       {a1 && a2 && a3 ? (
         <>{
-          <Dot a={a1} />
-          <Dot a={a2} />
-          <Dot a={a3} />
+          {a1 && <Dot a={a1} />}
+          {a2 && <Dot a={a2} />}
+          {a3 && <Dot a={a3} />}
         </>
       ) : (
         <View

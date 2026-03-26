@@ -61,6 +61,12 @@ declare module 'react-native' {
       TextInput: TextInputProps;
       ActivityIndicator: ActivityIndicatorProps;
       Image: ImageProps;
+      AnimatedView: any;
+      WebView: any;
+      Modal: any;
+      Picker: any;
+      Slider: any;
+      Switch: any;
     };
   }
   interface RNCWebViewProps {
@@ -81,13 +87,25 @@ declare module 'react-native' {
   interface SwitchProps {
     children?: import("react").ReactNode;
   }
-  interface JSX {
-    IntrinsicElements: {
-      WebView: WebViewProps;
-      Modal: ModalProps;
-      Picker: PickerProps;
-      Slider: SliderProps;
-      Switch: SwitchProps;
-    };
+  interface Animated {
+    View: any;
+  }
+  interface WebView {
+    props: WebViewProps;
+  }
+  interface Modal {
+    props: ModalProps;
+  }
+  interface Picker {
+    props: PickerProps;
+  }
+  interface Slider {
+    props: SliderProps;
+  }
+  interface Switch {
+    props: SwitchProps;
+  }
+  interface RNCWebView {
+    props: RNCWebViewProps;
   }
 }
