@@ -63,4 +63,31 @@ declare module 'react-native' {
       Image: ImageProps;
     };
   }
+  interface RNCWebViewProps {
+    children?: import("react").ReactNode;
+  }
+  interface WebViewProps {
+    children?: import("react").ReactNode;
+  }
+  interface ModalProps {
+    children?: import("react").ReactNode;
+  }
+  interface PickerProps {
+    children?: import("react").ReactNode;
+  }
+  interface SliderProps {
+    children?: import("react").ReactNode;
+  }
+  interface SwitchProps {
+    children?: import("react").ReactNode;
+  }
+  interface JSX {
+    IntrinsicElements: {
+      WebView: WebViewProps;
+      Modal: ModalProps;
+      Picker: PickerProps;
+      Slider: SliderProps;
+      Switch: SwitchProps;
+    };
+  }
 }

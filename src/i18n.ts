@@ -167,36 +167,23 @@ const resources = {
       matches: "匹配",
       profile: "个人资料",
       settings: "设置",
-      learning: "学习中",
+      learning: "学习",
       language: "语言",
       theme: "主题",
       save: "保存",
       cancel: "取消",
     },
   },
-} as const;
+};
 
-i18n.use(initReactI18next).init({
-  resources,
-  lng: "es",
-  fallbackLng: "es",
-  interpolation: { escapeValue: false },
-  compatibilityJSON: "v4",
-});
-
-// ✅ Cargar idioma guardado al iniciar
-export async function loadI18nLanguage(): Promise<LanguageCode> {
-  const saved = await getAppLanguage();
-  const lang = normalizeLang(saved);
-  if (i18n.language !== lang) await i18n.changeLanguage(lang);
-  return lang;
-}
-
-// ✅ Cambiar idioma y persistir (lo vas a usar desde Settings)
-export async function setI18nLanguage(lang: LanguageCode): Promise<void> {
-  const next = normalizeLang(lang);
-  await AsyncStorage.setItem("appLang", next);
-  if (i18n.language !== next) await i18n.changeLanguage(next);
-}
+i18n
+  .use(initReactI18next)
+  .init({
+    resources,
+    lng: normalizeLang(getAppLanguage()),
+    interpolation: {
+      escapeValue: false,
+    },
+  });
 
 export default i18n;

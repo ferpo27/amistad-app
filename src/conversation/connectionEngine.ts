@@ -104,23 +104,30 @@ export function getContacts(me: ProfileData) {
   return [];
 }
 
-// Función adicional para obtener la lista de grupos
-export function getGroups(me: ProfileData) {
-  // Lógica para obtener la lista de grupos
-  console.log(`Obteniendo lista de grupos de ${me.name}...`);
+// Función adicional para obtener la información del perfil de un usuario
+export function getProfileInfo(me: ProfileData) {
+  // Lógica para obtener la información del perfil de un usuario
+  console.log(`Obteniendo información del perfil de ${me.name}...`);
+  return me;
+}
+
+// Función adicional para actualizar la información del perfil de un usuario
+export function updateProfileInfo(me: ProfileData, newInfo: ProfileData) {
+  // Lógica para actualizar la información del perfil de un usuario
+  console.log(`Actualizando información del perfil de ${me.name}...`);
+  return { ...me, ...newInfo };
+}
+
+// Función adicional para obtener la lista de conversaciones de un usuario
+export function getConversations(me: ProfileData) {
+  // Lógica para obtener la lista de conversaciones de un usuario
+  console.log(`Obteniendo lista de conversaciones de ${me.name}...`);
   return [];
 }
 
-// Función adicional para unirse a un grupo
-export function joinGroup(me: ProfileData, groupId: string) {
-  // Lógica para unirse a un grupo
-  console.log(`Uniendo a ${me.name} al grupo ${groupId}...`);
-  return true;
-}
-
-// Función adicional para dejar un grupo
-export function leaveGroup(me: ProfileData, groupId: string) {
-  // Lógica para dejar un grupo
-  console.log(`Dejando a ${me.name} del grupo ${groupId}...`);
-  return true;
+// Función adicional para obtener la información de una conversación
+export function getConversationInfo(me: ProfileData, other: MatchProfile) {
+  // Lógica para obtener la información de una conversación
+  console.log(`Obteniendo información de la conversación entre ${me.name} y ${other.name}...`);
+  return { me, other };
 }
