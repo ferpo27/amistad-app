@@ -60,7 +60,6 @@ export async function getProfileById(id: string): Promise<RemoteProfile | null> 
   }
 }
 
-// Reemplazar colors.accentSoft por colors.accent + '33'
-// Sin embargo, en este archivo no se utiliza colors.accentSoft, por lo que no hay nada que reemplazar.
+// No se utiliza colors.accentSoft en este archivo, por lo que no hay nada que reemplazar.
 // Si se necesitara utilizar colors.accentSoft en el futuro, se podría reemplazar de la siguiente manera:
 // const accentSoft = colors.accent + '33';

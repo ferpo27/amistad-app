@@ -108,4 +108,11 @@ declare module 'react-native' {
   interface RNCWebView {
     props: RNCWebViewProps;
   }
+  interface IntrinsicElements {
+    view: ViewProps;
+    text: TextProps;
+    textinput: TextInputProps;
+    activityindicator: ActivityIndicatorProps;
+    image: ImageProps;
+  }
 }

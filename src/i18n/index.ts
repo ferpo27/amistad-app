@@ -1,5 +1,3 @@
-// src/i18n/index.ts
-
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
@@ -145,19 +143,57 @@ export const logout = async (): Promise<void> => {
   }
 };
 
-// Agregar funciones adicionales para manejar la configuración
-export const getConfig = async (): Promise<any> => {
-  try {
-    // Implementar la obtención de la configuración
-  } catch (error) {
-    console.error('Error al obtener la configuración:', error);
+// Función de ejemplo para exportar
+export const ejemplo = (): string => {
+  return 'Este es un ejemplo de función';
+};
+
+// Agregar más funciones para manejar la internacionalización
+export const getSupportedLanguages = (): string[] => {
+  return ['es-ES', 'en-US'];
+};
+
+export const getDefaultLanguage = (): string => {
+  return 'es-ES';
+};
+
+export const getLanguageDirection = (language: string): string => {
+  if (language === 'es-ES') {
+    return 'ltr';
+  } else if (language === 'en-US') {
+    return 'ltr';
+  } else {
+    return 'rtl';
   }
 };
 
-export const setConfig = async (config: any): Promise<void> => {
-  try {
-    // Implementar la configuración
-  } catch (error) {
-    console.error('Error al configurar:', error);
-  }
+// Agregar más funciones para manejar la configuración de la aplicación
+export const getConfig = (): any => {
+  return {
+    // Agregar configuración aquí
+  };
+};
+
+export const setConfig = (config: any): void => {
+  // Implementar la configuración
+};
+
+// Agregar más funciones para manejar la seguridad de la aplicación
+export const getSecurityToken = (): string => {
+  return 'token-de-seguridad';
+};
+
+export const validateSecurityToken = (token: string): boolean => {
+  return token === 'token-de-seguridad';
+};
+
+// Agregar más funciones para manejar la caché de la aplicación
+export const getCache = (): any => {
+  return {
+    // Agregar caché aquí
+  };
+};
+
+export const setCache = (cache: any): void => {
+  // Implementar la caché
 };

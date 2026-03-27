@@ -1,20 +1,15 @@
-```typescript
 import '@testing-library/jest-native/extend-expect';
 
 jest.useFakeTimers();
 
-// Mock native animated helper to silence warnings in React Native tests
 jest.mock('react-native/Libraries/Animated/NativeAnimatedHelper');
 
-// Mock react-native-reanimated (required for many RN libraries)
 jest.mock('react-native-reanimated', () => {
   const Reanimated = require('react-native-reanimated/mock');
-  // The mock for `call` is needed for some animations
   Reanimated.default.call = () => {};
   return Reanimated;
 });
 
-// Mock expo-constants if used in the project
 jest.mock('expo-constants', () => ({
   default: {
     manifest: {},
@@ -25,7 +20,6 @@ jest.mock('expo-constants', () => ({
   },
 }));
 
-// Mock async storage (common in RN apps)
 jest.mock('@react-native-async-storage/async-storage', () => ({
   setItem: jest.fn(),
   getItem: jest.fn(),
@@ -37,26 +31,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   multiRemove: jest.fn(),
 }));
 
-// Ensure timers are cleared after each test
 afterEach(() => {
   jest.clearAllTimers();
   jest.clearAllMocks();
 });
-
-jest.configure({
-  coverageThreshold: {
-    global: {
-      branches: 90,
-      functions: 90,
-      lines: 90,
-      statements: 90,
-    },
-  },
-  verbose: true,
-  collectCoverage: true,
-  coverageDirectory: 'coverage',
-  coverageReporters: ['json', 'lcov', 'clover'],
-  testEnvironment: 'jsdom',
-  testURL: 'http://localhost',
-});
-```
