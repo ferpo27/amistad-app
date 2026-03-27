@@ -143,5 +143,21 @@ export const logout = async (): Promise<void> => {
   }
 };
 
-// Agregar un export vacío para solucionar el error 'Cannot find module ../../../src/i18n'
-export {};
+export default {
+  t,
+  changeLanguage,
+  getLanguage,
+  addResource,
+  getResource,
+  hasResource,
+  loadResources,
+  saveResources,
+  onAppStart,
+  onAppStop,
+  onAppMount,
+  onAppUnmount,
+  navigateTo,
+  navigateBack,
+  login,
+  logout
+};
