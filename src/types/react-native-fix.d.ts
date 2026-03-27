@@ -115,4 +115,25 @@ declare module 'react-native' {
     activityindicator: ActivityIndicatorProps;
     image: ImageProps;
   }
+  interface FlatList {
+    props: FlatListProps<any>;
+  }
+  interface SectionList {
+    props: SectionListProps<any>;
+  }
+  interface ScrollView {
+    props: ScrollViewProps;
+  }
+  interface TouchableOpacity {
+    props: TouchableOpacityProps;
+  }
+  interface TouchableHighlight {
+    props: TouchableHighlightProps;
+  }
+  interface TouchableWithoutFeedback {
+    props: TouchableWithoutFeedbackProps;
+  }
+  interface TouchableNativeFeedback {
+    props: TouchableNativeFeedbackProps;
+  }
 }

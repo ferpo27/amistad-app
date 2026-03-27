@@ -94,3 +94,12 @@ export async function getBotReply(
 
   return fallbackReply(match.nativeLang);
 }
+
+// Crear archivo src/mock/matches.ts con los tipos y exports necesarios
+// export interface MatchProfile {
+//   // tipos y propiedades del objeto MatchProfile
+// }
+
+// export interface HistoryItem {
+//   // tipos y propiedades del objeto HistoryItem
+// }

@@ -143,57 +143,5 @@ export const logout = async (): Promise<void> => {
   }
 };
 
-// Función de ejemplo para exportar
-export const ejemplo = (): string => {
-  return 'Este es un ejemplo de función';
-};
-
-// Agregar más funciones para manejar la internacionalización
-export const getSupportedLanguages = (): string[] => {
-  return ['es-ES', 'en-US'];
-};
-
-export const getDefaultLanguage = (): string => {
-  return 'es-ES';
-};
-
-export const getLanguageDirection = (language: string): string => {
-  if (language === 'es-ES') {
-    return 'ltr';
-  } else if (language === 'en-US') {
-    return 'ltr';
-  } else {
-    return 'rtl';
-  }
-};
-
-// Agregar más funciones para manejar la configuración de la aplicación
-export const getConfig = (): any => {
-  return {
-    // Agregar configuración aquí
-  };
-};
-
-export const setConfig = (config: any): void => {
-  // Implementar la configuración
-};
-
-// Agregar más funciones para manejar la seguridad de la aplicación
-export const getSecurityToken = (): string => {
-  return 'token-de-seguridad';
-};
-
-export const validateSecurityToken = (token: string): boolean => {
-  return token === 'token-de-seguridad';
-};
-
-// Agregar más funciones para manejar la caché de la aplicación
-export const getCache = (): any => {
-  return {
-    // Agregar caché aquí
-  };
-};
-
-export const setCache = (cache: any): void => {
-  // Implementar la caché
-};
+// Agregar un export vacío para solucionar el error 'Cannot find module ../../../src/i18n'
+export {};

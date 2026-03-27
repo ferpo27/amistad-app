@@ -57,6 +57,9 @@ export function useAutoTranslate(
     };
   }, [text, JSON.stringify(options)]);
 
+  // Agregar un console.log para ver que se está llamando correctamente
+  console.log('useAutoTranslate: Se está llamando');
+
   return {
     translatedText,
     loading,
