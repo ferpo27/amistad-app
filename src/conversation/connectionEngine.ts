@@ -104,37 +104,30 @@ export function getContacts(me: ProfileData) {
   return [];
 }
 
-// Función adicional para obtener la configuración de la conexión
-export function getConnectionConfig(me: ProfileData, other: MatchProfile) {
-  // Lógica para obtener la configuración de la conexión
-  console.log(`Obteniendo configuración de la conexión entre ${me.name} y ${other.name}...`);
-  return {};
-}
-
-// Función adicional para obtener la lista de historial de mensajes
+// Función adicional para obtener el historial de conversaciones
 export function getConversationHistory(me: ProfileData, other: MatchProfile) {
-  // Lógica para obtener la lista de historial de mensajes
-  console.log(`Obteniendo lista de historial de mensajes entre ${me.name} y ${other.name}...`);
+  // Lógica para obtener el historial de conversaciones
+  console.log(`Obteniendo historial de conversaciones entre ${me.name} y ${other.name}...`);
   return [];
 }
 
-// Función adicional para obtener la lista de contactos bloqueados
-export function getBlockedContacts(me: ProfileData) {
-  // Lógica para obtener la lista de contactos bloqueados
-  console.log(`Obteniendo lista de contactos bloqueados de ${me.name}...`);
+// Función adicional para obtener el estado de la conexión en tiempo real
+export function getRealTimeConnectionStatus(me: ProfileData, other: MatchProfile) {
+  // Lógica para obtener el estado de la conexión en tiempo real
+  console.log(`Obteniendo estado de la conexión en tiempo real entre ${me.name} y ${other.name}...`);
+  return true;
+}
+
+// Función adicional para enviar un mensaje de texto con formato
+export function sendFormattedMessage(me: ProfileData, other: MatchProfile, message: string) {
+  // Lógica para enviar un mensaje de texto con formato
+  console.log(`Enviando mensaje de texto con formato de ${me.name} a ${other.name}: ${message}`);
+  return true;
+}
+
+// Función adicional para obtener la lista de mensajes no leídos
+export function getUnreadMessages(me: ProfileData, other: MatchProfile) {
+  // Lógica para obtener la lista de mensajes no leídos
+  console.log(`Obteniendo lista de mensajes no leídos entre ${me.name} y ${other.name}...`);
   return [];
-}
-
-// Función adicional para bloquear un contacto
-export function blockContact(me: ProfileData, other: MatchProfile) {
-  // Lógica para bloquear un contacto
-  console.log(`Bloqueando contacto de ${me.name}...`);
-  return true;
-}
-
-// Función adicional para desbloquear un contacto
-export function unblockContact(me: ProfileData, other: MatchProfile) {
-  // Lógica para desbloquear un contacto
-  console.log(`Desbloqueando contacto de ${me.name}...`);
-  return true;
 }

@@ -1,6 +1,7 @@
 import { View, TextInput, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { useState } from "react";
 import { story } from "../storage/story";
+import { colors } from "../constants/colors";
 
 type Props = {
   storyId: string;
@@ -35,7 +36,7 @@ export default function StoryComposer({ storyId }: Props) {
         style={styles.input}
         editable={!saving}
       />
-      {saving && <ActivityIndicator style={styles.loader} />}
+      {saving && <ActivityIndicator style={styles.loader} color={colors.accent + '33'} />}
     </View>
   );
 }
@@ -52,5 +53,6 @@ const styles = StyleSheet.create({
   },
   loader: {
     marginTop: 8,
+    color: colors.accent + '33',
   },
 });

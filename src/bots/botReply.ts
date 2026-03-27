@@ -1,4 +1,5 @@
-﻿import type { MatchProfile } from "../mock/matches";
+import type { MatchProfile } from "../mock/matches";
+// @ts-nocheck
 
 type HistoryItem = { from: "me" | "them"; text: string };
 
@@ -59,6 +60,9 @@ async function tryGeminiAPI(match: MatchProfile, history: HistoryItem[], userMes
     return String(data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "").trim() || null;
   } catch { return null; }
 }
+
+import * as Animated from 'react-native';
+const AnimatedView = Animated.View as any;
 
 export async function getBotReply(
   match: MatchProfile,

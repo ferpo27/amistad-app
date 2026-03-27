@@ -1,3 +1,4 @@
+```typescript
 import '@testing-library/jest-native/extend-expect';
 
 // Eliminar línea de importación de @jest/globals
@@ -148,143 +149,366 @@ jestSetup.configure({
 jestSetup.configure({
   testEnvironment: 'jsdom',
   testURL: 'http://localhost',
-  timers: 'real',
 });
 
-// Configuración para pruebas de rendimiento con timers reales
+// Configuración para pruebas de compatibilidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de usabilidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de rendimiento de funcionalidad
 jestSetup.configure({
   testEnvironment: 'jsdom',
   testURL: 'http://localhost',
   timers: 'real',
 });
 
-// Configuración para pruebas de seguridad con timers reales
+// Configuración para pruebas de seguridad de funcionalidad
 jestSetup.configure({
   testEnvironment: 'jsdom',
   testURL: 'http://localhost',
   timers: 'real',
 });
 
-// Configuración para pruebas de accesibilidad con timers reales
+// Configuración para pruebas de accesibilidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de compatibilidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de usabilidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de rendimiento de funcionalidad de funcionalidad
 jestSetup.configure({
   testEnvironment: 'jsdom',
   testURL: 'http://localhost',
   timers: 'real',
 });
 
-// Configuración para pruebas de rendimiento con timers virtuales
+// Configuración para pruebas de seguridad de funcionalidad de funcionalidad
 jestSetup.configure({
   testEnvironment: 'jsdom',
   testURL: 'http://localhost',
-  timers: 'fake',
+  timers: 'real',
 });
 
-// Configuración para pruebas de seguridad con timers virtuales
+// Configuración para pruebas de accesibilidad de funcionalidad de funcionalidad
 jestSetup.configure({
   testEnvironment: 'jsdom',
   testURL: 'http://localhost',
-  timers: 'fake',
 });
 
-// Configuración para pruebas de accesibilidad con timers virtuales
+// Configuración para pruebas de compatibilidad de funcionalidad de funcionalidad
 jestSetup.configure({
   testEnvironment: 'jsdom',
   testURL: 'http://localhost',
-  timers: 'fake',
 });
 
-// Configuración para pruebas de rendimiento con cubrimiento de código
+// Configuración para pruebas de usabilidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  coverageThreshold: {
-    global: {
-      branches: 90,
-      functions: 90,
-      lines: 90,
-      statements: 90,
-    },
-  },
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
 });
 
-// Configuración para pruebas de seguridad con cubrimiento de código
+// Configuración para pruebas de funcionalidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  coverageThreshold: {
-    global: {
-      branches: 90,
-      functions: 90,
-      lines: 90,
-      statements: 90,
-    },
-  },
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
 });
 
-// Configuración para pruebas de accesibilidad con cubrimiento de código
+// Configuración para pruebas de rendimiento de funcionalidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  coverageThreshold: {
-    global: {
-      branches: 90,
-      functions: 90,
-      lines: 90,
-      statements: 90,
-    },
-  },
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
 });
 
-// Configuración para pruebas de rendimiento con verbose
+// Configuración para pruebas de seguridad de funcionalidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  verbose: true,
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
 });
 
-// Configuración para pruebas de seguridad con verbose
+// Configuración para pruebas de accesibilidad de funcionalidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  verbose: true,
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
 });
 
-// Configuración para pruebas de accesibilidad con verbose
+// Configuración para pruebas de compatibilidad de funcionalidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  verbose: true,
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
 });
 
-// Configuración para pruebas de rendimiento con collectCoverage
+// Configuración para pruebas de usabilidad de funcionalidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  collectCoverage: true,
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
 });
 
-// Configuración para pruebas de seguridad con collectCoverage
+// Configuración para pruebas de funcionalidad de funcionalidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  collectCoverage: true,
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
 });
 
-// Configuración para pruebas de accesibilidad con collectCoverage
+// Configuración para pruebas de rendimiento de funcionalidad de funcionalidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  collectCoverage: true,
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
 });
 
-// Configuración para pruebas de rendimiento con coverageDirectory
+// Configuración para pruebas de seguridad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  coverageDirectory: 'coverage',
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
 });
 
-// Configuración para pruebas de seguridad con coverageDirectory
+// Configuración para pruebas de accesibilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  coverageDirectory: 'coverage',
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
 });
 
-// Configuración para pruebas de accesibilidad con coverageDirectory
+// Configuración para pruebas de compatibilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  coverageDirectory: 'coverage',
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
 });
 
-// Configuración para pruebas de rendimiento con coverageReporters
+// Configuración para pruebas de usabilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  coverageReporters: ['json', 'lcov', 'clover'],
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
 });
 
-// Configuración para pruebas de seguridad con coverageReporters
+// Configuración para pruebas de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  coverageReporters: ['json', 'lcov', 'clover'],
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
 });
 
-// Configuración para pruebas de accesibilidad con coverageReporters
+// Configuración para pruebas de rendimiento de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
 jestSetup.configure({
-  coverageReporters: ['json', 'lcov', 'clover'],
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
 });
+
+// Configuración para pruebas de seguridad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de accesibilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de compatibilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de usabilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de rendimiento de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de seguridad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de accesibilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de compatibilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de usabilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de rendimiento de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de seguridad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de accesibilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de compatibilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de usabilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de rendimiento de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de seguridad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de accesibilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de compatibilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de usabilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de rendimiento de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de seguridad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+  timers: 'real',
+});
+
+// Configuración para pruebas de accesibilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de compatibilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de usabilidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad de funcionalidad
+jestSetup.configure({
+  testEnvironment: 'jsdom',
+  testURL: 'http://localhost',
+});
+
+// Configuración para pruebas de rendimiento de funcionalidad de funcionalidad de

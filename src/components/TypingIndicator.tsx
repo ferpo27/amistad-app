@@ -55,11 +55,10 @@ export default function TypingIndicator() {
         alignSelf: "flex-start",
       }}
     >
-      {a1 && a2 && a3 ? (
-        <>{
-          {a1 && <Dot a={a1} />}
-          {a2 && <Dot a={a2} />}
-          {a3 && <Dot a={a3} />}
+      {a1 && a2 && a3 ? (<>
+          <Dot a={a1} />
+          <Dot a={a2} />
+          <Dot a={a3} />
         </>
       ) : (
         <View
