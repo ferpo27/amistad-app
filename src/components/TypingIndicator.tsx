@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import * as React from "react";
 import { Animated, View } from "react-native";
 import { useThemeMode } from "../../theme";
 
@@ -6,11 +6,11 @@ const AnimatedView = Animated.View as any;
 
 export default function TypingIndicator() {
   const { colors } = useThemeMode();
-  const a1 = useRef(new Animated.Value(0.3)).current;
-  const a2 = useRef(new Animated.Value(0.3)).current;
-  const a3 = useRef(new Animated.Value(0.3)).current;
-  const [texto, setTexto] = useState('');
-  useEffect(() => {
+  const a1 = React.useRef(new Animated.Value(0.3)).current;
+  const a2 = React.useRef(new Animated.Value(0.3)).current;
+  const a3 = React.useRef(new Animated.Value(0.3)).current;
+  const [texto, setTexto] = React.useState('');
+  React.useEffect(() => {
     const pulse = (v: Animated.Value, delay: number) =>
       Animated.loop(
         Animated.sequence([

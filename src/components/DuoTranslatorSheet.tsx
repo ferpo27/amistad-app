@@ -116,7 +116,7 @@ const DuoTranslatorSheet: React.FC<Props> = ({
   fromLang,
   toLang,
 }) => {
-  const theme = useTheme();
+  const theme: any = useTheme();
 
   return (
     // @ts-ignore
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   },
   pressable: {
     padding: 10,
-    backgroundColor: '#fff', // Agregado para evitar error de tipo
+    backgroundColor: '#fff', 
   },
 });
 

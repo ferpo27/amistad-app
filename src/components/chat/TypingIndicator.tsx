@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, View } from "react-native";
-import { useThemeMode } from "../../theme";
+import { useThemeMode } from "../../../theme";
 
 export default function TypingIndicator() {
   const { colors } = useThemeMode();
