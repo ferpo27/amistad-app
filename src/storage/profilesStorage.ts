@@ -1,4 +1,3 @@
-// src/storage/profilesStorage.ts
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../theme';
@@ -25,15 +24,20 @@ export async function getDiscoveryProfiles(limit = 30): Promise<RemoteProfile[]>
       .select('id, displayName:display_name, username, country, city, nativeLang:native_lang, bio, interests, learning, photoUrl:photo_url')
       .limit(limit);
 
-    if (error || !data) return [];
-    const profiles = data as RemoteProfile[];
+    if (error || !data) {
+      throw new Error('Error al obtener perfiles');
+    }
+    const profiles: RemoteProfile[] = data;
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(profiles));
     return profiles;
-  } catch {
+  } catch (error) {
+    console.error('Error al obtener perfiles:', error);
     try {
       const cached = await AsyncStorage.getItem(CACHE_KEY);
       if (cached) return JSON.parse(cached) as RemoteProfile[];
-    } catch { /* noop */ }
+    } catch (error) {
+      console.error('Error al obtener perfiles desde caché:', error);
+    }
     return [];
   }
 }
@@ -46,20 +50,21 @@ export async function getProfileById(id: string): Promise<RemoteProfile | null> 
       .eq('id', id)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {
+      throw new Error('Error al obtener perfil');
+    }
     return data as RemoteProfile;
-  } catch {
+  } catch (error) {
+    console.error('Error al obtener perfil:', error);
     try {
       const cached = await AsyncStorage.getItem(CACHE_KEY);
       if (cached) {
         const profiles: RemoteProfile[] = JSON.parse(cached);
         return profiles.find((p) => p.id === id) ?? null;
       }
-    } catch { /* noop */ }
+    } catch (error) {
+      console.error('Error al obtener perfil desde caché:', error);
+    }
     return null;
   }
 }
-
-// No se utiliza colors.accentSoft en este archivo, por lo que no hay nada que reemplazar.
-// Si se necesitara utilizar colors.accentSoft en el futuro, se podría reemplazar de la siguiente manera:
-// const accentSoft = colors.accent + '33';
