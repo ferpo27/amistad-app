@@ -28,3 +28,4 @@ venv/
 
 expo-env.d.ts
 # @end expo-clitranslator-api/.venv/ 
+translator-api/.venv/ 
