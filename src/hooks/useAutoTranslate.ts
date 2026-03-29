@@ -33,7 +33,7 @@ export function useAutoTranslate(
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err as Error);
+          setError(err as any);
         }
       } finally {
         if (!cancelled) {

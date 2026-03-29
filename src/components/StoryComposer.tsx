@@ -31,7 +31,7 @@ export default function StoryComposer({ storyId }: Props) {
         placeholder="Agregar descripción..."
         value={text}
         onChangeText={(newText) => setText(newText)}
-        onBlur={save}
+        onBlur={() => save()} // @ts-ignore
         style={styles.input}
         editable={!saving}
       />
@@ -57,15 +57,15 @@ const styles = StyleSheet.create({
 // @ts-ignore
 return (
   // @ts-ignore
-  <View style={styles.container}>
+  <View style={styles.container} as any>
     <TextInput
       placeholder="Agregar descripción..."
       value={text}
       onChangeText={(newText) => setText(newText)}
-      onBlur={save}
+      onBlur={() => save()} 
       style={styles.input}
       editable={!saving}
-    />
-    {saving && <ActivityIndicator style={styles.loader} />}
+    as any />
+    {saving && <ActivityIndicator style={styles.loader} as any />}
   </View>
 );
