@@ -1,5 +1,5 @@
-import type { MatchProfile } from "../mock/matches";
-import type { ProfileData } from "../storage";
+import type { MatchProfile } from "../../mock/matches";
+import type { ProfileData } from "../../storage";
 
 /**
  * Genera sugerencias reales para iniciar conversación

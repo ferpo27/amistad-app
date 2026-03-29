@@ -22,11 +22,11 @@ export async function getBotResponse(message: string): Promise<string> {
 
     const data: BotResponse = await res.json();
 
-    if (!data || typeof data.reply !== "string") {
+    if (!data || typeof (data as any).reply !== "string") {
       throw new Error("Invalid response format from bot API.");
     }
 
-    return data.reply;
+    return (data as any).reply;
   } catch (error) {
     console.error("Error fetching bot response:", error);
     throw error;
