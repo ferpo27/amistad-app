@@ -45,30 +45,36 @@ export default function ParallaxScrollView({
   });
 
   return (
-    <Animated.FlatList
-      ref={scrollRef}
-      style={{ backgroundColor, flex: 1 }}
-      scrollEventThrottle={16}
-      data={[{ key: 'header' }, { key: 'content' }]}
-      renderItem={({ item }) => {
-        if (item.key === 'header') {
-          return (
-            <Animated.View
-              style=[
-                styles.header,
-                { backgroundColor: headerBackgroundColor[colorScheme as keyof typeof headerBackgroundColor] },
-                headerAnimatedStyle,
-                { overflow: 'hidden' },
-              ]}
-            >
-              {headerImage}
-            </Animated.View>
-          );
-        } else {
-          return <ThemedView style={styles.content}>{children}</ThemedView>;
-        }
-      }}
-    />
+    <ThemedView style={styles.container}>
+      <Animated.FlatList
+        ref={scrollRef}
+        style={{ backgroundColor, flex: 1 }}
+        scrollEventThrottle={16}
+        data={[{ key: 'header' }, { key: 'content' }]}
+        renderItem={({ item }) => {
+          if (item.key === 'header') {
+            return (
+              <Animated.View
+                style=[
+                  styles.header,
+                  { backgroundColor: headerBackgroundColor[colorScheme as keyof typeof headerBackgroundColor] },
+                  headerAnimatedStyle,
+                  { overflow: 'hidden' },
+                ]}
+              >
+                {headerImage}
+              </Animated.View>
+            );
+          } else {
+            return (
+              <ThemedView style={styles.content}>
+                {children}
+              </ThemedView>
+            );
+          }
+        }}
+      />
+    </ThemedView>
   );
 }
 
