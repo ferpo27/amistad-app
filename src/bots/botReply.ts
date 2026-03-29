@@ -1,4 +1,4 @@
-import type { MatchProfile } from "../mock/matches";
+import type { MatchProfile } from "../mock/matches.ts";
 // @ts-nocheck
 
 type HistoryItem = { from: "me" | "them"; text: string };
