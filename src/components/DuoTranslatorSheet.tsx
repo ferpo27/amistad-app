@@ -12,7 +12,7 @@ import BottomSheet from "./BottomSheet";
 import { useTheme } from "../theme";
 import type { LanguageCode } from "../storage";
 import { splitIntoSentences, tokenize } from "../translate/duoTranslate";
-import getWordMeaning from 'C:/Users/ferna/Documents/app/src/translate/getWordMeaning';
+import * as getWordMeaning from 'C:/Users/ferna/Documents/app/src/translate/getWordMeaning';
 
 const LANG_ISO: Record<LanguageCode, string> = {
   es: "es", en: "en", de: "de", ru: "ru", ja: "ja", zh: "zh-CN",
