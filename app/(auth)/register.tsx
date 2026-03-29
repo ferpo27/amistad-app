@@ -57,7 +57,7 @@ const RegisterScreen: React.FC = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Error al registrar usuario');
+        throw new Error((errorData as any).message || 'Error al registrar usuario');
       }
 
       Alert.alert('Éxito', 'Registro completado correctamente');

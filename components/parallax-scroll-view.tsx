@@ -1,79 +1,55 @@
-import type { PropsWithChildren, ReactElement } from 'react';
-import { StyleSheet } from 'react-native';
 import Animated, {
   interpolate,
   useAnimatedRef,
   useAnimatedStyle,
-  useScrollOffset,
+  useScrollViewOffset,
 } from 'react-native-reanimated';
-
-import { ThemedView } from '@/components/themed-view';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { StyleSheet } from 'react-native';
+import { ThemedView } from './ThemedView';
 
 const HEADER_HEIGHT = 250;
 
-type Props = PropsWithChildren<{
-  headerImage: ReactElement;
+type Props = {
+  headerImage: React.ReactElement;
   headerBackgroundColor: { dark: string; light: string };
-}>;
+  children: React.ReactNode;
+};
 
 export default function ParallaxScrollView({
   children,
   headerImage,
   headerBackgroundColor,
 }: Props) {
-  const backgroundColor = useThemeColor({}, 'background');
-  const colorScheme = useColorScheme() ?? 'light';
-  const scrollRef = useAnimatedRef<Animated.FlatList>();
-  const scrollOffset = useScrollOffset(scrollRef);
-  const headerAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        {
-          translateY: interpolate(
-            scrollOffset.value,
-            [-HEADER_HEIGHT, 0, HEADER_HEIGHT],
-            [-HEADER_HEIGHT / 2, 0, HEADER_HEIGHT * 0.75]
-          ),
-        },
-        {
-          scale: interpolate(scrollOffset.value, [-HEADER_HEIGHT, 0, HEADER_HEIGHT], [2, 1, 1]),
-        },
-      ],
-    } as Animated.StyleProp<Animated.AnimatedStyle<'translateY' | 'scale'>>;
-  });
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const scrollOffset = useScrollViewOffset(scrollRef);
+
+  const headerAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: interpolate(
+          scrollOffset.value,
+          [-HEADER_HEIGHT, 0, HEADER_HEIGHT],
+          [-HEADER_HEIGHT / 2, 0, HEADER_HEIGHT * 0.75]
+        ),
+      },
+      {
+        scale: interpolate(
+          scrollOffset.value,
+          [-HEADER_HEIGHT, 0, HEADER_HEIGHT],
+          [2, 1, 1]
+        ),
+      },
+    ],
+  }) as any);
 
   return (
     <ThemedView style={styles.container}>
-      <Animated.FlatList
-        ref={scrollRef}
-        style={{ backgroundColor, flex: 1 }}
-        scrollEventThrottle={16}
-        data={[{ key: 'header' }, { key: 'content' }]}
-        renderItem={({ item }) => {
-          if (item.key === 'header') {
-            return (
-              <Animated.View
-                style=[
-                  styles.header,
-                  { backgroundColor: headerBackgroundColor[colorScheme as keyof typeof headerBackgroundColor] },
-                  headerAnimatedStyle,
-                  { overflow: 'hidden' },
-                ]}
-              >
-                {headerImage}
-              </Animated.View>
-            );
-          } else {
-            return (
-              <ThemedView style={styles.content}>
-                {children}
-              </ThemedView>
-            );
-          }
-        }}
-      />
+      <Animated.ScrollView ref={scrollRef} scrollEventThrottle={16}>
+        <Animated.View style={[styles.header, headerAnimatedStyle]}>
+          {headerImage}
+        </Animated.View>
+        <ThemedView style={styles.content}>{children}</ThemedView>
+      </Animated.ScrollView>
     </ThemedView>
   );
 }

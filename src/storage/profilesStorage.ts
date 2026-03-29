@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { colors } from '../theme';
+import colors from '../theme';
 
 export type RemoteProfile = {
   id: string;

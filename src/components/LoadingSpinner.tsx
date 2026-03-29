@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, StyleSheet, View } from '@react-native-community/react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 const COLORS = {
   PRIMARY: '#3498db',
@@ -36,7 +36,7 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size={spinnerSize} color={spinnerColor} />
+      <ActivityIndicator size={spinnerSize as number} color={spinnerColor} />
     </View>
   );
 };

@@ -8,11 +8,11 @@ import {
   StyleSheet
 } from "react-native";
 
-import { BottomSheet } from "./BottomSheet"; // @ts-ignore
+import BottomSheet from "./BottomSheet"; 
 import { useTheme } from "../theme";
 import type { LanguageCode } from "../storage";
 import { splitIntoSentences, tokenize } from "../translate/duoTranslate";
-import { getWordMeaning } from "../translate/getWordMeaning";
+import getWordMeaning from "../translate/getWordMeaning";
 
 const LANG_ISO: Record<LanguageCode, string> = {
   es: "es", en: "en", de: "de", ru: "ru", ja: "ja", zh: "zh-CN",
@@ -93,8 +93,8 @@ async function translateWithMyMemory(
     clearTimeout(timer);
     if (!res.ok) return null;
     const data = await res.json();
-    const translated: string = data?.responseData?.translatedText ?? "";
-    const status: number = data?.responseStatus ?? 0;
+    const translated: string = (data as any).responseData?.translatedText ?? "";
+    const status: number = (data as any).responseStatus ?? 0;
     if (
       status !== 200 ||
       !translated ||

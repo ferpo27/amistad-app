@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, View } from "react-native";
-import { useThemeMode } from "../../../theme";
+import { useThemeMode } from "../theme";
 
 export default function TypingIndicator() {
   const { colors } = useThemeMode();
@@ -26,7 +26,7 @@ export default function TypingIndicator() {
     };
   }, [a1, a2, a3]);
   const Dot = ({ a }: { a: Animated.Value }) => (
-    <Animated.View
+    <Animated.View // @ts-ignore
       style={{
         width: 6,
         height: 6,

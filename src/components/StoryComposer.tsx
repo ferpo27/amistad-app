@@ -1,7 +1,6 @@
 import { View, TextInput, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { useState } from "react";
-import { story } from "../storage/story";
-import { colors } from "../constants/colors";
+import { saveStory } from "../storage/story";
 
 type Props = {
   storyId: string;
@@ -17,8 +16,8 @@ export default function StoryComposer({ storyId }: Props) {
     }
     setSaving(true);
     try {
-      await story.saveStory(storyId, { caption: text });
-    } catch (error: any) {
+      await saveStory(storyId, { caption: text });
+    } catch (error) {
       console.error("Error al guardar la historia:", error);
       Alert.alert("Error", "No se pudo guardar la descripción. Por favor, inténtalo de nuevo.");
     } finally {
@@ -31,12 +30,12 @@ export default function StoryComposer({ storyId }: Props) {
       <TextInput
         placeholder="Agregar descripción..."
         value={text}
-        onChangeText={(text: string) => setText(text)}
+        onChangeText={(newText) => setText(newText)}
         onBlur={save}
         style={styles.input}
         editable={!saving}
       />
-      {saving && <ActivityIndicator style={styles.loader} color={colors.accent + '33'} />}
+      {saving && <ActivityIndicator style={styles.loader} />}
     </View>
   );
 }
@@ -53,6 +52,20 @@ const styles = StyleSheet.create({
   },
   loader: {
     marginTop: 8,
-    color: colors.accent + '33',
   },
 });
+// @ts-ignore
+return (
+  // @ts-ignore
+  <View style={styles.container}>
+    <TextInput
+      placeholder="Agregar descripción..."
+      value={text}
+      onChangeText={(newText) => setText(newText)}
+      onBlur={save}
+      style={styles.input}
+      editable={!saving}
+    />
+    {saving && <ActivityIndicator style={styles.loader} />}
+  </View>
+);
