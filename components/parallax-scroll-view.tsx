@@ -41,7 +41,7 @@ export default function ParallaxScrollView({
           scale: interpolate(scrollOffset.value, [-HEADER_HEIGHT, 0, HEADER_HEIGHT], [2, 1, 1]),
         },
       ],
-    };
+    } as Animated.StyleProp<Animated.AnimatedStyle<'translateY' | 'scale'>>;
   });
 
   return (
@@ -54,12 +54,13 @@ export default function ParallaxScrollView({
         if (item.key === 'header') {
           return (
             <Animated.View
-              style={[
+              style=[
                 styles.header,
                 { backgroundColor: headerBackgroundColor[colorScheme as keyof typeof headerBackgroundColor] },
                 headerAnimatedStyle,
-                { overflow: 'hidden' }, 
-              ]}>
+                { overflow: 'hidden' },
+              ]}
+            >
               {headerImage}
             </Animated.View>
           );

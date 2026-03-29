@@ -27,8 +27,9 @@
     ".expo/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "babel.config.js",
-    "translator-api"
-  ]
+  "node_modules",
+  "babel.config.js", 
+  "translator-api",
+  "amistad-app"
+ ]
 }

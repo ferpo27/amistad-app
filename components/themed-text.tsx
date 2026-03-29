@@ -14,6 +14,7 @@ export function ThemedText({
   ...rest
 }: ThemedTextProps) {
   return (
+    // @ts-ignore
     <Text
       style={[
         type === 'default' ? styles.default : undefined,

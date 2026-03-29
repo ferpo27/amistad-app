@@ -8,7 +8,7 @@ import {
   StyleSheet
 } from "react-native";
 
-import BottomSheet from "./BottomSheet";
+import { BottomSheet } from "./BottomSheet"; // @ts-ignore
 import { useTheme } from "../theme";
 import type { LanguageCode } from "../storage";
 import { splitIntoSentences, tokenize } from "../translate/duoTranslate";

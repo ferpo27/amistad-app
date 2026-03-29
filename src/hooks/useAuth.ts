@@ -2,19 +2,19 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { setAuthOk } from '../storage';
 
-// Define un tipo más preciso para el usuario si se desea
-// type User = supabase.auth.User;
-
 export const useAuth = () => {
-  const [user, setUser] = useState<any>(null); // Cambiar a User si se define el tipo
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
+    setError(null);
+    const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
+    if (err) {
       setAuthOk(false);
       setLoading(false);
-      throw error;
+      setError(err.message);
+      throw err;
     }
     setUser(data.user);
     setAuthOk(true);
@@ -23,13 +23,41 @@ export const useAuth = () => {
   }, []);
 
   const logout = useCallback(async () => {
-    const { error } = await supabase.auth.signOut();
-    if (!error) {
+    const { error: err } = await supabase.auth.signOut();
+    if (!err) {
       setUser(null);
       setAuthOk(false);
     }
     setLoading(false);
-    return error;
+    return err;
+  }, []);
+
+  const verifyOtp = useCallback(async (email: string, token: string) => {
+    setError(null);
+    setLoading(true);
+    const { data, error: err } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'email',
+    });
+    setLoading(false);
+    if (err) {
+      setError(err.message);
+      return false;
+    }
+    setUser(data.user);
+    setAuthOk(true);
+    return true;
+  }, []);
+
+  const resendOtp = useCallback(async (email: string) => {
+    setError(null);
+    const { error: err } = await supabase.auth.resend({ type: 'signup', email });
+    if (err) {
+      setError(err.message);
+      return false;
+    }
+    return true;
   }, []);
 
   useEffect(() => {
@@ -43,11 +71,8 @@ export const useAuth = () => {
       }
       setLoading(false);
     });
-
-    return () => {
-      subscription?.unsubscribe();
-    };
+    return () => { subscription?.unsubscribe(); };
   }, []);
 
-  return { user, loading, login, logout };
+  return { user, loading, login, logout, verifyOtp, resendOtp, error };
 };
