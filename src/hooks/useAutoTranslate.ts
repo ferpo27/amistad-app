@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import autoTranslate from '../translate/autoTranslate';
+import autoTranslate from 'C:/Users/ferna/Documents/app/src/translate/autoTranslate';
 
 type AutoTranslateOptions = { 
   from?: string; 
