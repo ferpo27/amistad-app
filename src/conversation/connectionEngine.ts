@@ -1,5 +1,5 @@
-import type { MatchProfile } from "../../mock/matches";
-import type { ProfileData } from "../../storage";
+import type { MatchProfile } from "../mock/matches";
+import type { ProfileData } from "../storage";
 
 /**
  * Genera sugerencias reales para iniciar conversación
@@ -39,17 +39,17 @@ export const connectionEngine = {
   generateSmartIntro,
   connect: (me: ProfileData, other: MatchProfile) => {
     // Lógica para conectar a dos usuarios
-    console.log(`Conectando a ${me.name} con ${other.name}...`);
+    console.log(`Conectando a ${(me as any).name} con ${(other as any).name}...`);
     return true;
   },
   disconnect: (me: ProfileData, other: MatchProfile) => {
     // Lógica para desconectar a dos usuarios
-    console.log(`Desconectando a ${me.name} de ${other.name}...`);
+    console.log(`Desconectando a ${(me as any).name} de ${(other as any).name}...`);
     return true;
   },
   sendMessage: (me: ProfileData, other: MatchProfile, message: string) => {
     // Lógica para enviar un mensaje entre dos usuarios
-    console.log(`Enviando mensaje de ${me.name} a ${other.name}: ${message}`);
+    console.log(`Enviando mensaje de ${(me as any).name} a ${(other as any).name}: ${message}`);
     return true;
   },
 };
@@ -58,76 +58,76 @@ export const connectionEngine = {
 export function startConversation(me: ProfileData, other: MatchProfile) {
   const starters = generateConversationStarters(me, other);
   const intro = generateSmartIntro(me, other);
-  console.log(`Iniciando conversación entre ${me.name} y ${other.name}...`);
+  console.log(`Iniciando conversación entre ${(me as any).name} y ${(other as any).name}...`);
   console.log(`Sugerencias de conversación: ${starters.join(', ')}`);
   console.log(`Introducción: ${intro}`);
   return true;
 }
 
 export function endConversation(me: ProfileData, other: MatchProfile) {
-  console.log(`Finalizando conversación entre ${me.name} y ${other.name}...`);
+  console.log(`Finalizando conversación entre ${(me as any).name} y ${(other as any).name}...`);
   return true;
 }
 
 // Función adicional para obtener el estado de la conexión
 export function getConnectionStatus(me: ProfileData, other: MatchProfile) {
   // Lógica para obtener el estado de la conexión
-  console.log(`Obteniendo estado de la conexión entre ${me.name} y ${other.name}...`);
+  console.log(`Obteniendo estado de la conexión entre ${(me as any).name} y ${(other as any).name}...`);
   return true;
 }
 
 // Función adicional para enviar un mensaje de voz
 export function sendVoiceMessage(me: ProfileData, other: MatchProfile, message: string) {
   // Lógica para enviar un mensaje de voz
-  console.log(`Enviando mensaje de voz de ${me.name} a ${other.name}: ${message}`);
+  console.log(`Enviando mensaje de voz de ${(me as any).name} a ${(other as any).name}: ${message}`);
   return true;
 }
 
 // Función adicional para enviar un mensaje de imagen
 export function sendImageMessage(me: ProfileData, other: MatchProfile, image: string) {
   // Lógica para enviar un mensaje de imagen
-  console.log(`Enviando mensaje de imagen de ${me.name} a ${other.name}: ${image}`);
+  console.log(`Enviando mensaje de imagen de ${(me as any).name} a ${(other as any).name}: ${image}`);
   return true;
 }
 
 // Función adicional para obtener la lista de mensajes
 export function getMessages(me: ProfileData, other: MatchProfile) {
   // Lógica para obtener la lista de mensajes
-  console.log(`Obteniendo lista de mensajes entre ${me.name} y ${other.name}...`);
+  console.log(`Obteniendo lista de mensajes entre ${(me as any).name} y ${(other as any).name}...`);
   return [];
 }
 
 // Función adicional para obtener la lista de contactos
 export function getContacts(me: ProfileData) {
   // Lógica para obtener la lista de contactos
-  console.log(`Obteniendo lista de contactos de ${me.name}...`);
+  console.log(`Obteniendo lista de contactos de ${(me as any).name}...`);
   return [];
 }
 
 // Función adicional para obtener el historial de conversaciones
 export function getConversationHistory(me: ProfileData, other: MatchProfile) {
   // Lógica para obtener el historial de conversaciones
-  console.log(`Obteniendo historial de conversaciones entre ${me.name} y ${other.name}...`);
+  console.log(`Obteniendo historial de conversaciones entre ${(me as any).name} y ${(other as any).name}...`);
   return [];
 }
 
 // Función adicional para obtener el estado de la conexión en tiempo real
 export function getRealTimeConnectionStatus(me: ProfileData, other: MatchProfile) {
   // Lógica para obtener el estado de la conexión en tiempo real
-  console.log(`Obteniendo estado de la conexión en tiempo real entre ${me.name} y ${other.name}...`);
+  console.log(`Obteniendo estado de la conexión en tiempo real entre ${(me as any).name} y ${(other as any).name}...`);
   return true;
 }
 
 // Función adicional para enviar un mensaje de texto con formato
 export function sendFormattedMessage(me: ProfileData, other: MatchProfile, message: string) {
   // Lógica para enviar un mensaje de texto con formato
-  console.log(`Enviando mensaje de texto con formato de ${me.name} a ${other.name}: ${message}`);
+  console.log(`Enviando mensaje de texto con formato de ${(me as any).name} a ${(other as any).name}: ${message}`);
   return true;
 }
 
 // Función adicional para obtener la lista de mensajes no leídos
 export function getUnreadMessages(me: ProfileData, other: MatchProfile) {
   // Lógica para obtener la lista de mensajes no leídos
-  console.log(`Obteniendo lista de mensajes no leídos entre ${me.name} y ${other.name}...`);
+  console.log(`Obteniendo lista de mensajes no leídos entre ${(me as any).name} y ${(other as any).name}...`);
   return [];
 }

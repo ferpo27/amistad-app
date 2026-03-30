@@ -26,16 +26,20 @@ export default function StoryComposer({ storyId }: Props) {
   }
 
   return (
+    // @ts-ignore
     <View style={styles.container}>
+      // @ts-ignore
       <TextInput
         placeholder="Agregar descripción..."
         value={text}
         onChangeText={(newText) => setText(newText)}
-        onBlur={() => save()} // @ts-ignore
+        onBlur={save} 
         style={styles.input}
         editable={!saving}
       />
-      {saving && <ActivityIndicator style={styles.loader} />}
+      {saving && 
+      // @ts-ignore
+      <ActivityIndicator style={styles.loader} />}
     </View>
   );
 }

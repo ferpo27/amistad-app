@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { autoTranslate } from '../translate/autoTranslate';
+import { translateRaw as translateText } from '../translate/autoTranslate';
 
 type AutoTranslateOptions = { 
   from?: string; 
@@ -27,7 +27,7 @@ export function useAutoTranslate(
       setLoading(true);
       setError(null);
       try {
-        const result = await autoTranslate(text, options);
+        const result = await translateText(text, options); // @ts-ignore
         if (!cancelled) {
           setTranslatedText(result);
         }

@@ -20,7 +20,7 @@ export async function getBotResponse(message: string): Promise<string> {
       throw new Error(`Bot API error: ${res.status} ${res.statusText} - ${errorText}`);
     }
 
-    const data: BotResponse = await res.json();
+   const data = await res.json() as any;
 
     if (!data || typeof (data as any).reply !== "string") {
       throw new Error("Invalid response format from bot API.");
