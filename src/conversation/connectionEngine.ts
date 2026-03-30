@@ -33,7 +33,7 @@ export function generateSmartIntro(me: ProfileData, other: MatchProfile) {
   return `You’re connecting with someone from ${other.country}. Ask something unique about their culture.`;
 }
 
-// ✅ Alias por compat (tu error decía que faltaba connectionEngine)
+// ✅ Alias por compat
 export const connectionEngine = {
   generateConversationStarters,
   generateSmartIntro,

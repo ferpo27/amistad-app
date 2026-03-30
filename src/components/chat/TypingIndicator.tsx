@@ -37,7 +37,7 @@ export default function TypingIndicator() {
       }}
     />
   );
-  const AnimatedView = (Animated.View as any);
+  const AnimatedView = Animated.View as any;
   return (
     <View
       style={{
