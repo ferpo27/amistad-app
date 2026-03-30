@@ -29,6 +29,7 @@ export default function StoryComposer({ storyId }: Props) {
     // @ts-ignore
     <View style={styles.container}>
       // @ts-ignore
+      // @ts-ignore
       <TextInput
         placeholder="Agregar descripción..."
         value={text}

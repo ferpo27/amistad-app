@@ -18,11 +18,11 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   color = 'primary',
 }) => {
   const validSizes: (number | 'small' | 'large')[] = ['small', 'large'];
-  const spinnerSize: number | 'small' | 'large' =
+  const spinnerSize: 'small' | 'large' =
     validSizes.includes(size as any)
-      ? size
+      ? (size as 'small' | 'large')
       : typeof size === 'number' && size > 0
-      ? size
+      ? 'large'
       : 'large';
 
   const colorMap: { [key: string]: string } = {
@@ -36,7 +36,7 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size={spinnerSize as number} color={spinnerColor} />
+      <ActivityIndicator size={Number(spinnerSize)} color={spinnerColor} />
     </View>
   );
 };

@@ -42,7 +42,7 @@ export default function Verify() {
   };
 
   const onKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>, idx: number) => {
-    if (e.nativeEvent.key === "Backspace" && !digits[idx] && idx > 0) {
+    if ((e as any).nativeEvent.key === "Backspace" && !digits[idx] && idx > 0) {
       inputs.current[idx - 1]?.focus();
     }
   };

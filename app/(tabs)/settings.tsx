@@ -55,7 +55,7 @@ export default function SettingsScreen() {
       title: 'Preferencias',
       rows: [
         {
-          icon: (isDark ? 'moon' : 'sunny-outline') as const,
+          icon: isDark ? ('moon' as const) : ('sunny-outline' as const),
           label: isDark ? 'Modo oscuro' : 'Modo claro',
           isToggle: true, value: isDark,
           onPress: () => setMode(isDark ? 'light' : 'dark'),
