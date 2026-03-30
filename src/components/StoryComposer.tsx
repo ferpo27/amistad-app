@@ -33,7 +33,7 @@ export default function StoryComposer({ storyId }: Props) {
         placeholder="Agregar descripción..."
         value={text}
         onChangeText={(newText) => setText(newText)}
-        onBlur={save} 
+        onBlur={() => save()} 
         style={styles.input}
         editable={!saving}
       />
