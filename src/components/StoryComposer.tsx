@@ -54,18 +54,3 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 });
-// @ts-ignore
-return (
-  // @ts-ignore
-  <View style={styles.container} as any>
-    <TextInput
-      placeholder="Agregar descripción..."
-      value={text}
-      onChangeText={(newText) => setText(newText)}
-      onBlur={() => save()} 
-      style={styles.input}
-      editable={!saving}
-    as any />
-    {saving && <ActivityIndicator style={styles.loader} as any />}
-  </View>
-);
