@@ -16,7 +16,7 @@ export default function StoryComposer({ storyId }: Props) {
     }
     setSaving(true);
     try {
-      await saveStory(storyId, { caption: text });
+      await (saveStory as any)(storyId, { caption: text });
     } catch (error) {
       console.error("Error al guardar la historia:", error);
       Alert.alert("Error", "No se pudo guardar la descripción. Por favor, inténtalo de nuevo.");
@@ -37,9 +37,9 @@ export default function StoryComposer({ storyId }: Props) {
         style={styles.input}
         editable={!saving}
       />
-      {saving && 
+      {saving ? 
       // @ts-ignore
-      <ActivityIndicator style={styles.loader} />}
+      <ActivityIndicator style={styles.loader} /> : null}
     </View>
   );
 }

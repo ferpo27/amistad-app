@@ -36,7 +36,7 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size={size as (number | 'small' | 'large')} color={spinnerColor} />
+      <ActivityIndicator size={spinnerSize as (number | 'small' | 'large')} color={spinnerColor} />
     </View>
   );
 };
