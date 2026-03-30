@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { translateRaw } from '../translate/autoTranslate';
+import translateRaw from '../translate/autoTranslate';
 
 type AutoTranslateOptions = { 
   from?: string; 
