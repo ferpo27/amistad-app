@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import autoTranslate from 'C:/Users/ferna/Documents/app/src/translate/autoTranslate';
+import { translateRaw } from '../translate/autoTranslate';
 
 type AutoTranslateOptions = { 
   from?: string; 
@@ -27,7 +27,7 @@ export function useAutoTranslate(
       setLoading(true);
       setError(null);
       try {
-        const result = await autoTranslate(text, options); 
+        const result = await translateRaw(text, (options?.from ?? 'auto') as any, options?.to as any);
         if (!cancelled) {
           setTranslatedText(result);
         }

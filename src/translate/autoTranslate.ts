@@ -104,7 +104,7 @@ async function myMemoryTranslate(
   }
 }
 
-async function translateRaw(
+export async function translateRaw(
   text: string,
   src: LanguageCode | "auto",
   tgt: LanguageCode
