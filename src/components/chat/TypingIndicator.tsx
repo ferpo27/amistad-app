@@ -26,6 +26,7 @@ export default function TypingIndicator() {
     };
   }, [a1, a2, a3]);
   const Dot = ({ a }: { a: Animated.Value }) => (
+    // @ts-ignore
     <Animated.View 
       style={{
         width: 6,
