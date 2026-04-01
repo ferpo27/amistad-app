@@ -1,6 +1,7 @@
 import { View, TextInput, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { useState } from "react";
 import { saveStory } from "../storage/story";
+const _TextInputFixed = TextInput as any;
 
 type Props = {
   storyId: string;
@@ -31,7 +32,7 @@ export default function StoryComposer({ storyId }: Props) {
       // @ts-ignore
       // @ts-ignore
       // @ts-ignore
-      <TextInput
+      <_TextInputFixed
         placeholder="Agregar descripción..."
         value={text}
         onChangeText={(newText) => setText(newText)}
