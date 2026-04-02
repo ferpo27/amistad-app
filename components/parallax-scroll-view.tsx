@@ -14,6 +14,8 @@ type Props = {
   children: React.ReactNode;
 };
 
+const _ThemedView = ThemedView as any;
+
 export default function ParallaxScrollView({
   children,
   headerImage,
@@ -42,14 +44,14 @@ export default function ParallaxScrollView({
   }) as any);
 
   return (
-    <ThemedView style={styles.container}>
+    <_ThemedView style={styles.container}>
       <Animated.ScrollView ref={scrollRef} scrollEventThrottle={16}>
         <Animated.View style={[styles.header, headerAnimatedStyle]}>
           {headerImage}
         </Animated.View>
-        <ThemedView style={styles.content}>{children}</ThemedView>
+        <_ThemedView style={styles.content}>{children}</_ThemedView>
       </Animated.ScrollView>
-    </ThemedView>
+    </_ThemedView>
   );
 }
 
