@@ -11,17 +11,24 @@ export default function Index() {
     (async () => {
       const auth = await isAuthOk();
       if (!auth) {
-        router.replace('/landing');
+        router.push('/landing');
         return;
       }
       const onboarded = await isOnboardingDone();
       if (!onboarded) {
-        router.replace('/onboarding');
+        router.push('/onboarding');
         return;
       }
       // Check if the route '/(tabs)/home' exists and is correctly defined
-      router.replace('/tabs/home'); // Assuming '/tabs/home' is the correct route
+      if (router.canGo('/tabs/home')) {
+        router.replace('/tabs/home'); 
+      } else {
+        console.error('Route /tabs/home does not exist');
+      }
     })();
+    return () => {
+      // cleanup
+    };
   }, [router]);
 
   return (
