@@ -11,25 +11,25 @@ export default function Index() {
     (async () => {
       const auth = await isAuthOk();
       if (!auth) {
-        if (router) { 
+        if (router && router.push) { 
           router.push('/landing');
         }
-      }
-      const onboarded = await isOnboardingDone();
-      if (!onboarded) {
-        if (router) { 
-          router.push('/onboarding');
-        }
-        return;
-      } else { 
-        if (router) { 
-          router.push('/tabs');
+      } else {
+        const onboarded = await isOnboardingDone();
+        if (onboarded) {
+          if (router && router.push) { 
+            router.push('/tabs');
+          }
+        } else {
+          if (router && router.push) { 
+            router.push('/onboarding');
+          }
         }
       }
       // Check if the route '/(tabs)/home' exists and is correctly defined
       if (router && router.canGo) { 
         if (router.canGo('/tabs/home')) {
-          if (router) { 
+          if (router && router.replace) { 
             router.replace('/tabs/home'); 
           }
         } else {
