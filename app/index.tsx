@@ -18,16 +18,10 @@ export default function Index() {
         }
       } else {
         const onboarded = await isOnboardingDone();
-        if (onboarded) {
-          if (router && router.push) { 
-            router.push('/app');
-          } else { 
-            router.push('/auth');
-          }
-        } else {
-          if (router && router.push) { 
-            router.push('/onboarding');
-          }
+        if (onboarded) { 
+          router.push('/app');
+        } else { 
+          router.push('/onboarding');
         }
       }
       // Check if the route '/(tabs)/home' exists and is correctly defined
