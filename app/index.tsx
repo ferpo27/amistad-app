@@ -1,7 +1,7 @@
-// app/index.tsx
+import { isOnboardingDone } from '../src/storage';
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import { isAuthOk, isOnboardingDone } from '../src/storage';
+import { isAuthOk } from '../src/storage';
 import { View, Text } from 'react-native';
 
 export default function Index() {
