@@ -216,43 +216,14 @@ export async function getProfile(): Promise<ProfileData> {
   };
 }
 
-export async function updateProfile(data: Partial<ProfileData>): Promise<void> {
-  const raw = await AsyncStorage.getItem(StorageKeys.profile);
-  const parsed = safeJsonParse<ProfileData>(raw) ?? {};
-
-  const updated = { ...parsed, ...data };
-
-  const favorites = Array.isArray(updated.favorites) ? updated.favorites.filter(Boolean) : [];
-  const interests = Array.isArray(updated.interests) ? updated.interests.filter(Boolean) : [];
-
-  const learn = normalizeLearn(updated.languageLearning?.learn);
-  const goal = (updated.languageLearning?.goal ?? "Amistad") as LanguageGoal;
-
-  const stories = normalizeStories(updated.stories);
-
-  const final: ProfileData = {
-    displayName: typeof updated.displayName === "string" ? updated.displayName : undefined,
-    username:    typeof updated.username    === "string" ? updated.username    : undefined,
-    country:     typeof updated.country     === "string" ? updated.country     : undefined,
-    city:        typeof updated.city        === "string" ? updated.city        : undefined,
-    nativeLang:  isLanguageCode(updated.nativeLang)      ? updated.nativeLang  : undefined,
-    bio:         typeof updated.bio         === "string" ? updated.bio         : undefined,
-    photoUri:    typeof updated.photoUri    === "string" ? updated.photoUri    : undefined,
-    contact: updated.contact ?? undefined,
-    dob: updated.dob ?? undefined,
-    favorites,
-    interests,
-    languageLearning: { learn, goal },
-    stories,
-  };
-
-  await AsyncStorage.setItem(StorageKeys.profile, JSON.stringify(final));
+export async function setProfile(profile: ProfileData): Promise<void> {
+  const raw = JSON.stringify(profile);
+  await AsyncStorage.setItem(StorageKeys.profile, raw);
 }
 
 export async function getLanguage(): Promise<LanguageCode> {
-  const raw = await AsyncStorage.getItem(StorageKeys.appLang);
-  const lang = raw as LanguageCode;
-  return lang;
+  const v = await AsyncStorage.getItem(StorageKeys.appLang);
+  return v as LanguageCode;
 }
 
 export async function setLanguage(lang: LanguageCode): Promise<void> {
@@ -260,9 +231,8 @@ export async function setLanguage(lang: LanguageCode): Promise<void> {
 }
 
 export async function getThemeMode(): Promise<ThemeMode> {
-  const raw = await AsyncStorage.getItem(StorageKeys.themeMode);
-  const mode = raw as ThemeMode;
-  return mode;
+  const v = await AsyncStorage.getItem(StorageKeys.themeMode);
+  return v as ThemeMode;
 }
 
 export async function setThemeMode(mode: ThemeMode): Promise<void> {
@@ -270,38 +240,23 @@ export async function setThemeMode(mode: ThemeMode): Promise<void> {
 }
 
 export async function getSavedMatches(): Promise<string[]> {
-  const raw = await AsyncStorage.getItem(StorageKeys.savedMatches);
-  const matches = safeJsonParse<string[]>(raw) ?? [];
-  return matches;
+  const v = await AsyncStorage.getItem(StorageKeys.savedMatches);
+  return v ? JSON.parse(v) as string[] : [];
 }
 
-export async function addSavedMatch(matchId: string): Promise<void> {
-  const matches = await getSavedMatches();
-  matches.push(matchId);
-  await AsyncStorage.setItem(StorageKeys.savedMatches, JSON.stringify(matches));
-}
-
-export async function removeSavedMatch(matchId: string): Promise<void> {
-  const matches = await getSavedMatches();
-  const index = matches.indexOf(matchId);
-  if (index !== -1) {
-    matches.splice(index, 1);
-    await AsyncStorage.setItem(StorageKeys.savedMatches, JSON.stringify(matches));
-  }
+export async function setSavedMatches(matches: string[]): Promise<void> {
+  const raw = JSON.stringify(matches);
+  await AsyncStorage.setItem(StorageKeys.savedMatches, raw);
 }
 
 export async function getChatMessages(matchId: string): Promise<ChatMessage[]> {
-  const raw = await AsyncStorage.getItem(chatKey(matchId));
-  const messages = safeJsonParse<ChatMessage[]>(raw) ?? [];
-  return messages;
+  const key = chatKey(matchId);
+  const v = await AsyncStorage.getItem(key);
+  return v ? JSON.parse(v) as ChatMessage[] : [];
 }
 
-export async function addChatMessage(matchId: string, message: ChatMessage): Promise<void> {
-  const messages = await getChatMessages(matchId);
-  messages.push(message);
-  await AsyncStorage.setItem(chatKey(matchId), JSON.stringify(messages));
-}
-
-export async function clearChatMessages(matchId: string): Promise<void> {
-  await AsyncStorage.removeItem(chatKey(matchId));
+export async function setChatMessages(matchId: string, messages: ChatMessage[]): Promise<void> {
+  const key = chatKey(matchId);
+  const raw = JSON.stringify(messages);
+  await AsyncStorage.setItem(key, raw);
 }
