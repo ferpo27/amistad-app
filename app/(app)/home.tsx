@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Link, useRouter } from "expo-router";
-import { clearAll, getProfile } from "../../src/storage";
+import { getProfile } from "../../src/storage";
+import { clearAll } from "./storage/clearAll"; // assuming clearAll is exported from this module
 
 export default function Home() {
   const router = useRouter();
