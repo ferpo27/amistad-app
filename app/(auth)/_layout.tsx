@@ -1,14 +1,12 @@
-// app/(auth)/_layout.tsx
-import React from "react";
-import { Stack } from "expo-router";
-
-export default function AuthLayout() {
+import React from 'react';
+import { Slot } from 'expo-router';
+import { ThemeProvider } from '../../src/theme';
+import '../src/i18n';
+ 
+export default function Layout() {
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        animation: "fade",
-      }}
-    />
+    <ThemeProvider>
+      <Slot />
+    </ThemeProvider>
   );
 }

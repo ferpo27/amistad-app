@@ -4,8 +4,9 @@ import Animated, {
   useAnimatedStyle,
   useScrollViewOffset,
 } from 'react-native-reanimated';
-import { StyleSheet } from 'react-native';
-import { ThemedView } from './ThemedView'; 
+import { StyleSheet, View } from 'react-native';
+
+const ViewFixed = View as any;
 const HEADER_HEIGHT = 250;
 
 type Props = {
@@ -13,8 +14,6 @@ type Props = {
   headerBackgroundColor: { dark: string; light: string };
   children: React.ReactNode;
 };
-
-const _ThemedView = ThemedView as any;
 
 export default function ParallaxScrollView({
   children,
@@ -44,14 +43,14 @@ export default function ParallaxScrollView({
   }) as any);
 
   return (
-    <_ThemedView style={styles.container}>
+    <ViewFixed style={styles.container}>
       <Animated.ScrollView ref={scrollRef} scrollEventThrottle={16}>
         <Animated.View style={[styles.header, headerAnimatedStyle]}>
           {headerImage}
         </Animated.View>
-        <_ThemedView style={styles.content}>{children}</_ThemedView>
+        <ViewFixed style={styles.content}>{children}</ViewFixed>
       </Animated.ScrollView>
-    </_ThemedView>
+    </ViewFixed>
   );
 }
 

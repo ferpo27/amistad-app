@@ -19,10 +19,13 @@ import {
 import { PROFILES } from "../../../src/mock/profiles";
 import { MATCHES } from "../../../src/mock/matches";
 
+const _Animated_ViewFixed = (Animated as any).View;
+const _Animated_ScrollViewFixed = (Animated as any).ScrollView;
+
 const { width: SCREEN_W } = Dimensions.get("window");
 
 const FLAGS: Record<string, string> = {
-  es: "🇦🇷", en: "🇺🇸", de: "🇩🇪", ja: "🇯🇵", ru: "🇷🇺", zh: "🇨🇳",
+  es: "🇪🇸", en: "🇺🇸", de: "🇩🇪", ja: "🇯🇵", ru: "🇷🇺", zh: "🇨🇳",
 };
 const LANG_NAMES: Record<string, string> = {
   es: "Español", en: "English", de: "Deutsch",
@@ -45,7 +48,6 @@ function timeLeft(expiresAt?: number): string | null {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-// ─── Stat badge ──────────────────────────────────────────────────────────────
 function StatBadge({ label, value, colors }: { label: string; value: string; colors: any }) {
   return (
     <View style={{
@@ -59,7 +61,6 @@ function StatBadge({ label, value, colors }: { label: string; value: string; col
   );
 }
 
-// ─── PUBLIC PROFILE ──────────────────────────────────────────────────────────
 function PublicProfile({ id }: { id: string }) {
   const router = useRouter();
   const { colors } = useTheme();
@@ -69,7 +70,6 @@ function PublicProfile({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [liked, setLiked] = useState(false);
 
-  // Avatar parallax
   const avatarScale = scrollY.interpolate({
     inputRange: [-80, 0], outputRange: [1.3, 1], extrapolate: "clamp",
   });
@@ -83,16 +83,12 @@ function PublicProfile({ id }: { id: string }) {
   useEffect(() => {
     (async () => {
       setLoading(true);
-
-      // 1. Intentar Supabase primero
       const remote = await getProfileById(id);
       if (remote && remote.displayName) {
         setProfile(remote);
         setLoading(false);
         return;
       }
-
-      // 2. Fallback a mock data
       const p = (PROFILES as any[]).find((x) => String(x.id) === id);
       if (p) {
         setProfile({
@@ -146,8 +142,8 @@ function PublicProfile({ id }: { id: string }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
 
-      {/* Header flotante que aparece al hacer scroll */}
-      <Animated.View style={{
+      {/* Header flotante */}
+      <_Animated_ViewFixed style={{
         position: "absolute", top: 0, left: 0, right: 0, zIndex: 50,
         paddingTop: Platform.OS === "ios" ? 54 : 20,
         paddingBottom: 12, paddingHorizontal: 16,
@@ -176,9 +172,9 @@ function PublicProfile({ id }: { id: string }) {
         <Text style={{ color: colors.fg, fontWeight: "700", fontSize: 16, flex: 1 }} numberOfLines={1}>
           {profile.displayName}
         </Text>
-      </Animated.View>
+      </_Animated_ViewFixed>
 
-      <Animated.ScrollView
+      <_Animated_ScrollViewFixed
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: true }
@@ -187,16 +183,14 @@ function PublicProfile({ id }: { id: string }) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
-        {/* ── HERO ── */}
+        {/* HERO */}
         <View style={{ alignItems: "center", paddingBottom: 28 }}>
 
-          {/* Fondo con gradiente simulado */}
           <View style={{
             position: "absolute", top: 0, left: 0, right: 0, height: 200,
             backgroundColor: colors.accent + "18",
           }} />
 
-          {/* Botón volver */}
           <View style={{
             position: "absolute", top: Platform.OS === "ios" ? 54 : 20, left: 16, zIndex: 10,
           }}>
@@ -210,7 +204,6 @@ function PublicProfile({ id }: { id: string }) {
             </Pressable>
           </View>
 
-          {/* Botón like */}
           <View style={{
             position: "absolute", top: Platform.OS === "ios" ? 54 : 20, right: 16, zIndex: 10,
           }}>
@@ -232,7 +225,7 @@ function PublicProfile({ id }: { id: string }) {
           </View>
 
           {/* Avatar */}
-          <Animated.View style={{
+          <_Animated_ViewFixed style={{
             marginTop: Platform.OS === "ios" ? 110 : 80,
             transform: [{ scale: avatarScale }],
           }}>
@@ -252,7 +245,7 @@ function PublicProfile({ id }: { id: string }) {
                 : <Text style={{ color: "#fff", fontSize: 38, fontWeight: "900" }}>{initials}</Text>
               }
             </View>
-          </Animated.View>
+          </_Animated_ViewFixed>
 
           <Text style={{
             color: colors.fg, fontSize: 26, fontWeight: "900",
@@ -286,27 +279,14 @@ function PublicProfile({ id }: { id: string }) {
             </Text>
           ) : null}
 
-          {/* Stats rápidas */}
           <View style={{ flexDirection: "row", gap: 10, marginTop: 20, paddingHorizontal: 24, width: "100%" }}>
-            <StatBadge
-              label="Idioma nativo"
-              value={FLAGS[profile.nativeLang] ?? "🌍"}
-              colors={colors}
-            />
-            <StatBadge
-              label="Aprendiendo"
-              value={String(profile.learning?.length ?? 0)}
-              colors={colors}
-            />
-            <StatBadge
-              label="Intereses"
-              value={String(profile.interests?.length ?? 0)}
-              colors={colors}
-            />
+            <StatBadge label="Idioma nativo" value={FLAGS[profile.nativeLang] ?? "🌐"} colors={colors} />
+            <StatBadge label="Aprendiendo" value={String(profile.learning?.length ?? 0)} colors={colors} />
+            <StatBadge label="Intereses" value={String(profile.interests?.length ?? 0)} colors={colors} />
           </View>
         </View>
 
-        {/* ── CTA CHAT ── */}
+        {/* CTA CHAT */}
         <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
           <Pressable
             onPress={() => router.push(`/(tabs)/chat/${profile.id}` as any)}
@@ -328,9 +308,8 @@ function PublicProfile({ id }: { id: string }) {
 
         <View style={{ paddingHorizontal: 20, gap: 20 }}>
 
-          {/* ── IDIOMAS ── */}
+          {/* IDIOMAS */}
           <Section label="IDIOMAS" colors={colors}>
-            {/* Nativo */}
             <View style={{
               backgroundColor: colors.card, borderRadius: 14,
               borderWidth: 1, borderColor: colors.border,
@@ -342,7 +321,7 @@ function PublicProfile({ id }: { id: string }) {
                 backgroundColor: colors.accent + "20",
                 alignItems: "center", justifyContent: "center",
               }}>
-                <Text style={{ fontSize: 20 }}>{FLAGS[profile.nativeLang] ?? "🌍"}</Text>
+                <Text style={{ fontSize: 20 }}>{FLAGS[profile.nativeLang] ?? "🌐"}</Text>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: colors.fg, fontWeight: "700", fontSize: 15 }}>
@@ -360,7 +339,6 @@ function PublicProfile({ id }: { id: string }) {
               </View>
             </View>
 
-            {/* Aprendiendo */}
             {(profile.learning ?? []).map((l, i) => {
               const levelColor = LEVEL_COLORS[l.level ?? ""] ?? colors.accent;
               return (
@@ -375,7 +353,7 @@ function PublicProfile({ id }: { id: string }) {
                     backgroundColor: levelColor + "20",
                     alignItems: "center", justifyContent: "center",
                   }}>
-                    <Text style={{ fontSize: 20 }}>{FLAGS[l.lang] ?? "🌍"}</Text>
+                    <Text style={{ fontSize: 20 }}>{FLAGS[l.lang] ?? "🌐"}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: colors.fg, fontWeight: "700", fontSize: 15 }}>
@@ -399,7 +377,7 @@ function PublicProfile({ id }: { id: string }) {
             })}
           </Section>
 
-          {/* ── INTERESES ── */}
+          {/* INTERESES */}
           {(profile.interests ?? []).length > 0 && (
             <Section label="INTERESES" colors={colors}>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -417,9 +395,9 @@ function PublicProfile({ id }: { id: string }) {
           )}
 
         </View>
-      </Animated.ScrollView>
+      </_Animated_ScrollViewFixed>
 
-      {/* ── BOTTOM BAR FIJA ── */}
+      {/* BOTTOM BAR */}
       <View style={{
         position: "absolute", bottom: 0, left: 0, right: 0,
         backgroundColor: colors.bg,
@@ -465,7 +443,6 @@ function PublicProfile({ id }: { id: string }) {
   );
 }
 
-// ─── Sección helper ───────────────────────────────────────────────────────────
 function Section({ label, children, colors }: { label: string; children: React.ReactNode; colors: any }) {
   return (
     <View style={{ gap: 10 }}>
@@ -480,7 +457,6 @@ function Section({ label, children, colors }: { label: string; children: React.R
   );
 }
 
-// ─── MY PROFILE ──────────────────────────────────────────────────────────────
 function MyProfileScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -591,7 +567,7 @@ function MyProfileScreen() {
       contentContainerStyle={{ paddingBottom: 80 }}
       showsVerticalScrollIndicator={false}
     >
-      {/* ── HERO ── */}
+      {/* HERO */}
       <View style={{
         paddingTop: Platform.OS === "ios" ? 64 : 32,
         paddingBottom: 32, paddingHorizontal: 24,
@@ -661,7 +637,7 @@ function MyProfileScreen() {
 
       <View style={{ padding: 20, gap: 24 }}>
 
-        {/* ── HISTORIAS ── */}
+        {/* HISTORIAS */}
         <View style={{ gap: 10 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <Text style={{ color: colors.fg, opacity: 0.4, fontWeight: "800", fontSize: 11, letterSpacing: 1.2 }}>
@@ -737,11 +713,11 @@ function MyProfileScreen() {
             </ScrollView>
           )}
           <Text style={{ color: colors.fg, opacity: 0.25, fontSize: 11, fontWeight: "500" }}>
-            Mantené presionada para eliminar
+            Mantenés presionada para eliminar
           </Text>
         </View>
 
-        {/* ── IDIOMA NATIVO ── */}
+        {/* IDIOMA NATIVO */}
         {pNative ? (
           <Section label="IDIOMA NATIVO" colors={colors}>
             <View style={{
@@ -749,7 +725,7 @@ function MyProfileScreen() {
               borderColor: colors.border, borderRadius: 14, padding: 14,
               flexDirection: "row", alignItems: "center", gap: 12,
             }}>
-              <Text style={{ fontSize: 22 }}>{FLAGS[pNative] ?? "🌍"}</Text>
+              <Text style={{ fontSize: 22 }}>{FLAGS[pNative] ?? "🌐"}</Text>
               <Text style={{ color: colors.fg, fontWeight: "700", fontSize: 16 }}>
                 {LANG_NAMES[pNative] ?? pNative}
               </Text>
@@ -757,7 +733,7 @@ function MyProfileScreen() {
           </Section>
         ) : null}
 
-        {/* ── APRENDIENDO ── */}
+        {/* APRENDIENDO */}
         <Section label="APRENDIENDO" colors={colors}>
           {learning.length === 0 ? (
             <View style={{
@@ -778,7 +754,7 @@ function MyProfileScreen() {
                     borderColor: colors.border, borderRadius: 14, padding: 14,
                     flexDirection: "row", alignItems: "center", gap: 12,
                   }}>
-                    <Text style={{ fontSize: 22 }}>{FLAGS[l.lang] ?? "🌍"}</Text>
+                    <Text style={{ fontSize: 22 }}>{FLAGS[l.lang] ?? "🌐"}</Text>
                     <Text style={{ color: colors.fg, fontWeight: "700", fontSize: 15, flex: 1 }}>
                       {LANG_NAMES[l.lang] ?? l.lang}
                     </Text>
@@ -797,7 +773,7 @@ function MyProfileScreen() {
           )}
         </Section>
 
-        {/* ── INTERESES ── */}
+        {/* INTERESES */}
         <Section label="INTERESES" colors={colors}>
           {interests.length === 0 ? (
             <Text style={{ color: colors.fg, opacity: 0.35, fontWeight: "500" }}>
@@ -823,7 +799,6 @@ function MyProfileScreen() {
   );
 }
 
-// ─── Router ───────────────────────────────────────────────────────────────────
 export default function ProfileRoute() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   if (id) return <PublicProfile id={id} />;

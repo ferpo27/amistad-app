@@ -47,7 +47,11 @@
       "reactCompiler": true
     },
     "extra": {
-      "router": {},
+      "supabaseUrl": "https://ruryhbwbebboegfbinjd.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1cnloYndiZWJib2VnZmJpbmpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzI4OTUsImV4cCI6MjA4ODIwODg5NX0.DaaBpv_j4lmX1Dwda54fdvhncr6cuX6H9N6UL0UkCvE",
+      "router": {
+        "origin": false
+      },
       "eas": {
         "projectId": "dd65c5f4-228a-4119-9e78-eff0688b9fa1"
       }
