@@ -1,4 +1,3 @@
-// src/storage.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /**
@@ -38,7 +37,7 @@ export type ProfileData = {
   city?: string;
   nativeLang?: LanguageCode;
   contact?: Contact;
-  dob?: DOB;
+  dob?: any;
 
   bio?: string;
   photoUri?: string;
@@ -167,7 +166,7 @@ function normalizeStories(input: any): StoryPhoto[] {
  */
 export async function isAuthOk(): Promise<boolean> {
   const v = await AsyncStorage.getItem(StorageKeys.authOk);
-  return v === "1";
+  return v !== null && v === "1";
 }
 
 export async function setAuthOk(ok: boolean): Promise<void> {
@@ -176,7 +175,7 @@ export async function setAuthOk(ok: boolean): Promise<void> {
 
 export async function isOnboardingDone(): Promise<boolean> {
   const v = await AsyncStorage.getItem(StorageKeys.onboardingDone);
-  return v === "1";
+  return v !== null && v === "1";
 }
 
 export async function setOnboardingDone(done: boolean): Promise<void> {
@@ -217,179 +216,92 @@ export async function getProfile(): Promise<ProfileData> {
   };
 }
 
-export async function updateProfile(patch: Partial<ProfileData>): Promise<ProfileData> {
-  const cur = await getProfile();
+export async function updateProfile(data: Partial<ProfileData>): Promise<void> {
+  const raw = await AsyncStorage.getItem(StorageKeys.profile);
+  const parsed = safeJsonParse<ProfileData>(raw) ?? {};
 
-  const next: ProfileData = {
-    ...cur,
-    ...patch,
-    favorites: patch.favorites ? patch.favorites.filter(Boolean) : cur.favorites,
-    interests: patch.interests ? patch.interests.filter(Boolean) : cur.interests,
-    languageLearning: {
-      learn: normalizeLearn(patch.languageLearning?.learn ?? cur.languageLearning?.learn),
-      goal: (patch.languageLearning?.goal ?? cur.languageLearning?.goal ?? "Amistad") as LanguageGoal,
-    },
-    stories: patch.stories ? normalizeStories(patch.stories) : cur.stories,
+  const updated = { ...parsed, ...data };
+
+  const favorites = Array.isArray(updated.favorites) ? updated.favorites.filter(Boolean) : [];
+  const interests = Array.isArray(updated.interests) ? updated.interests.filter(Boolean) : [];
+
+  const learn = normalizeLearn(updated.languageLearning?.learn);
+  const goal = (updated.languageLearning?.goal ?? "Amistad") as LanguageGoal;
+
+  const stories = normalizeStories(updated.stories);
+
+  const final: ProfileData = {
+    displayName: typeof updated.displayName === "string" ? updated.displayName : undefined,
+    username:    typeof updated.username    === "string" ? updated.username    : undefined,
+    country:     typeof updated.country     === "string" ? updated.country     : undefined,
+    city:        typeof updated.city        === "string" ? updated.city        : undefined,
+    nativeLang:  isLanguageCode(updated.nativeLang)      ? updated.nativeLang  : undefined,
+    bio:         typeof updated.bio         === "string" ? updated.bio         : undefined,
+    photoUri:    typeof updated.photoUri    === "string" ? updated.photoUri    : undefined,
+    contact: updated.contact ?? undefined,
+    dob: updated.dob ?? undefined,
+    favorites,
+    interests,
+    languageLearning: { learn, goal },
+    stories,
   };
 
-  await AsyncStorage.setItem(StorageKeys.profile, JSON.stringify(next));
-  return next;
+  await AsyncStorage.setItem(StorageKeys.profile, JSON.stringify(final));
 }
 
-// ✅ Agregar historia (titulo opcional, expiresAt opcional)
-export async function addStoryPhoto(uri: string, title = "", expiresAt?: number): Promise<ProfileData> {
-  const cur = await getProfile();
-  const ts = Date.now();
-  const story: StoryPhoto = {
-    id: `${ts}-${Math.random().toString(16).slice(2)}`,
-    uri, title, ts,
-    ...(expiresAt ? { expiresAt } : {}),
-  };
-  const nextStories = [story, ...(cur.stories ?? [])];
-  return updateProfile({ stories: nextStories });
-}
-
-export async function updateStoryPhoto(storyId: string, patch: Partial<Pick<StoryPhoto, "title" | "uri">>): Promise<ProfileData> {
-  const cur = await getProfile();
-  const nextStories = (cur.stories ?? []).map((s) => (s.id === storyId ? { ...s, ...patch } : s));
-  return updateProfile({ stories: nextStories });
-}
-
-export async function removeStoryPhoto(storyId: string): Promise<ProfileData> {
-  const cur = await getProfile();
-  const nextStories = (cur.stories ?? []).filter((s) => s.id !== storyId);
-  return updateProfile({ stories: nextStories });
-}
-
-/**
- * =========================
- * Idioma UI
- * =========================
- */
-export async function getAppLanguage(): Promise<LanguageCode | null> {
+export async function getLanguage(): Promise<LanguageCode> {
   const raw = await AsyncStorage.getItem(StorageKeys.appLang);
-  if (!raw) return null;
-  return isLanguageCode(raw) ? raw : null;
+  const lang = raw as LanguageCode;
+  return lang;
 }
 
-export async function setAppLanguage(lang: LanguageCode): Promise<void> {
+export async function setLanguage(lang: LanguageCode): Promise<void> {
   await AsyncStorage.setItem(StorageKeys.appLang, lang);
 }
 
-/**
- * =========================
- * Theme
- * =========================
- */
-export async function getThemeMode(): Promise<ThemeMode | null> {
+export async function getThemeMode(): Promise<ThemeMode> {
   const raw = await AsyncStorage.getItem(StorageKeys.themeMode);
-  if (!raw) return null;
-  if (raw === "system" || raw === "light" || raw === "dark") return raw;
-  return null;
+  const mode = raw as ThemeMode;
+  return mode;
 }
 
 export async function setThemeMode(mode: ThemeMode): Promise<void> {
   await AsyncStorage.setItem(StorageKeys.themeMode, mode);
 }
 
-/**
- * =========================
- * Saved Matches
- * =========================
- */
 export async function getSavedMatches(): Promise<string[]> {
   const raw = await AsyncStorage.getItem(StorageKeys.savedMatches);
-  const parsed = safeJsonParse<string[]>(raw);
-  if (!Array.isArray(parsed)) return [];
-  return parsed.filter((x) => typeof x === "string" && x.trim().length > 0);
+  const matches = safeJsonParse<string[]>(raw) ?? [];
+  return matches;
 }
 
-export async function toggleSavedMatch(matchId: string): Promise<string[]> {
-  const cur = await getSavedMatches();
-  const exists = cur.includes(matchId);
-  const next = exists ? cur.filter((x) => x !== matchId) : [...cur, matchId];
-  await AsyncStorage.setItem(StorageKeys.savedMatches, JSON.stringify(next));
-  return next;
+export async function addSavedMatch(matchId: string): Promise<void> {
+  const matches = await getSavedMatches();
+  matches.push(matchId);
+  await AsyncStorage.setItem(StorageKeys.savedMatches, JSON.stringify(matches));
 }
 
-/**
- * =========================
- * Chat
- * =========================
- */
-export async function getChat(matchId: string): Promise<ChatMessage[]> {
-  const raw = await AsyncStorage.getItem(chatKey(matchId));
-  const parsed = safeJsonParse<any[]>(raw);
-  if (!Array.isArray(parsed)) return [];
-
-  const msgs: ChatMessage[] = parsed
-    .map((m: any) => {
-      const from: ChatFrom = m?.from === "them" ? "them" : "me";
-      const text = typeof m?.text === "string" ? m.text : "";
-      const ts = typeof m?.ts === "number" ? m.ts : Date.now();
-      const id =
-        typeof m?.id === "string" && m.id.length > 0 ? m.id : `${ts}-${Math.random().toString(16).slice(2)}`;
-      return { id, ts, from, text };
-    })
-    .filter((m) => m.text.trim().length > 0);
-
-  msgs.sort((a, b) => a.ts - b.ts);
-  return msgs;
-}
-
-export async function appendChat(
-  matchId: string,
-  message: Omit<ChatMessage, "id" | "ts"> & Partial<Pick<ChatMessage, "id" | "ts">>
-): Promise<ChatMessage[]> {
-  const cur = await getChat(matchId);
-
-  const msg: ChatMessage = {
-    id: message.id ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    ts: message.ts ?? Date.now(),
-    from: message.from === "them" ? "them" : "me",
-    text: typeof message.text === "string" ? message.text : "",
-  };
-
-  const next = [...cur, msg];
-  await AsyncStorage.setItem(chatKey(matchId), JSON.stringify(next));
-  return next;
-}
-
-export async function clearChat(matchId: string): Promise<void> {
-  await AsyncStorage.removeItem(chatKey(matchId));
-}
-
-export async function clearAll(): Promise<void> {
-  await AsyncStorage.clear();
-}
-
-/**
- * =========================
- * Dev helpers
- * =========================
- */
-export async function resetDevStorage(): Promise<void> {
-  try {
-    const keys = await AsyncStorage.getAllKeys();
-    // si en tu app no usás prefijos, esto no borra nada “de más”
-    // (podés cambiarlo a AsyncStorage.clear() si querés limpiar todo)
-    const appKeys = keys.filter((k) => k.startsWith("app_") || k.startsWith("amistad_"));
-    if (appKeys.length) await AsyncStorage.multiRemove(appKeys);
-  } catch {
-    // no rompas la app si falla
+export async function removeSavedMatch(matchId: string): Promise<void> {
+  const matches = await getSavedMatches();
+  const index = matches.indexOf(matchId);
+  if (index !== -1) {
+    matches.splice(index, 1);
+    await AsyncStorage.setItem(StorageKeys.savedMatches, JSON.stringify(matches));
   }
 }
 
-export type DOB = { day: number; month: number; year: number };
-
-export function ageFromDob(dob?: DOB | null): number | null {
-  if (!dob) return null;
-  const now = new Date();
-  const birth = new Date(dob.year, dob.month - 1, dob.day);
-  let age = now.getFullYear() - birth.getFullYear();
-  if (now.getMonth() - birth.getMonth() < 0 ||
-     (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) age--;
-  return age >= 0 ? age : null;
+export async function getChatMessages(matchId: string): Promise<ChatMessage[]> {
+  const raw = await AsyncStorage.getItem(chatKey(matchId));
+  const messages = safeJsonParse<ChatMessage[]>(raw) ?? [];
+  return messages;
 }
 
-export const isLoggedIn = isAuthOk;
+export async function addChatMessage(matchId: string, message: ChatMessage): Promise<void> {
+  const messages = await getChatMessages(matchId);
+  messages.push(message);
+  await AsyncStorage.setItem(chatKey(matchId), JSON.stringify(messages));
+}
+
+export async function clearChatMessages(matchId: string): Promise<void> {
+  await AsyncStorage.removeItem(chatKey(matchId));
+}

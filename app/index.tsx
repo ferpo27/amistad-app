@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { isAuthOk, isOnboardingDone } from '../src/storage';
+import { View, Text } from 'react-native';
 
 export default function Index() {
   const router = useRouter();
@@ -18,9 +19,14 @@ export default function Index() {
         router.replace('/onboarding');
         return;
       }
-      router.replace('/(tabs)/home');
+      // Check if the route '/(tabs)/home' exists and is correctly defined
+      router.replace('/tabs/home'); // Assuming '/tabs/home' is the correct route
     })();
   }, [router]);
 
-  return null;
+  return (
+    <View>
+      <Text>Loading...</Text>
+    </View>
+  );
 }
