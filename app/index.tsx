@@ -14,7 +14,6 @@ export default function Index() {
         if (router) { 
           router.push('/landing');
         }
-        return;
       }
       const onboarded = await isOnboardingDone();
       if (!onboarded) {
@@ -22,6 +21,10 @@ export default function Index() {
           router.push('/onboarding');
         }
         return;
+      } else { 
+        if (router) { 
+          router.push('/tabs');
+        }
       }
       // Check if the route '/(tabs)/home' exists and is correctly defined
       if (router && router.canGo) { 
