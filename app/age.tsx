@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { SafeAreaView, Text, TouchableOpacity, View, Modal, Pressable, FlatList } from "react-native";
 import { useRouter } from "expo-router";
-import { getProfile, updateProfile } from "../src/storage/storage"; // Fix import path
+import { getProfile, updateProfile } from "../../storage/storage"; 
 
 type Option = { label: string; value: number };
 

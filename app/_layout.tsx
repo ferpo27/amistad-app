@@ -1,7 +1,13 @@
 import React from 'react';
+import { Slot } from 'expo-router';
 import { ThemeProvider } from '../src/theme';
 import '../src/i18n';
-
-export default function Layout({ children }: { children: React.ReactNode }) {
-  return <ThemeProvider>{children}</ThemeProvider>;
+ 
+export default function Layout() {
+  return (
+    <ThemeProvider>
+      <Slot />
+    </ThemeProvider>
+  );
 }
+ 
