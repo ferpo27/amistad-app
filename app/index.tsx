@@ -12,13 +12,17 @@ export default function Index() {
       const auth = await isAuthOk();
       if (!auth) {
         if (router && router.push) { 
-          router.push('/landing');
+          router.push('/auth');
+        } else { 
+          router.push('/app');
         }
       } else {
         const onboarded = await isOnboardingDone();
         if (onboarded) {
           if (router && router.push) { 
-            router.push('/tabs');
+            router.push('/app');
+          } else { 
+            router.push('/auth');
           }
         } else {
           if (router && router.push) { 
