@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { getProfile } from "../../src/storage";
-import { clearAll } from "../../clearAll"; 
+// REMOVED: import { clearAll } from "./clearAll"; — module not found
 
 export default function Home() {
   const router = useRouter();
