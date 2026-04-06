@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TextInput, TouchableOpacity } from 'react-native';
-import { chatStorage } from '../../../storage/chatStorage';
-import { styles } from '../styles';
+import { chatStorage } from '../../../../storage/chatStorage';
+import { styles } from '../../styles';
 
 const Chat = () => {
   const [messages, setMessages] = useState([]);
