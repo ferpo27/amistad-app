@@ -22,7 +22,9 @@ const ReusableModal: React.FC<Props> = ({ visible, onClose, children }) => {
       <TouchableWithoutFeedback onPress={handleOverlayPress}>
         <View style={styles.overlay} />
       </TouchableWithoutFeedback>
-      <View style={styles.contentContainer}>{children}</View>
+      {children && (
+        <View style={styles.contentContainer}>{children}</View>
+      )}
     </Modal>
   );
 };
