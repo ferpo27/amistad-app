@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TextInput, TouchableOpacity } from 'react-native';
-import { chatStorage } from '../../storage/chatStorage';
-import { styles } from './styles';
+import { chatStorage } from '../../../storage/chatStorage';
+import { styles } from '../styles';
 
 const Chat = () => {
   const [messages, setMessages] = useState([]);
@@ -9,7 +9,7 @@ const Chat = () => {
 
   useEffect(() => {
     const loadMessages = async () => {
-      const messages = await chatStorage.loadMessages();
+      const messages = await chatStorage.getMessages('chatId');
       setMessages(messages);
     };
     loadMessages();
@@ -18,9 +18,9 @@ const Chat = () => {
 
   const handleSendMessage = async () => {
     if (newMessage) {
-      await chatStorage.sendMessage(newMessage);
+      await chatStorage.saveMessage('chatId', newMessage);
       setNewMessage('');
-      const messages = await chatStorage.loadMessages();
+      const messages = await chatStorage.getMessages('chatId');
       setMessages(messages);
     }
   };
