@@ -6,7 +6,8 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeMode } from '../../src/theme';
-import { clearAll, setAuthOk, setOnboardingDone } from '../../src/storage';
+import { storage, clearAll, setAuthOk, setOnboardingDone } from '../../src/storage';
+---
 import { useCallback } from 'react';
 
 export default function SettingsScreen() {

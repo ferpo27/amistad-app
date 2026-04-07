@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { default as chatStorage } from '../../src/storage/chatStorage';
-import { useRouter } from 'expo-router';
+import { View, Text, FlatList, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { storage, getMessages, saveMessage } from '../../src/storage';
+---
 import { useThemeMode } from '../../src/theme';
 
 const Chat = () => {
@@ -9,12 +9,11 @@ const Chat = () => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const { colors } = useThemeMode();
-  const router = useRouter();
 
   useEffect(() => {
     const loadMessages = async () => {
       try {
-        const msgs = await chatStorage.getMessages('chatId');
+        const msgs = await getMessages('chatId');
         setMessages(msgs ?? []);
       } catch (e) {
         setMessages([]);
@@ -27,9 +26,9 @@ const Chat = () => {
 
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return;
-    await chatStorage.saveMessage('chatId', newMessage);
+    await saveMessage('chatId', newMessage);
     setNewMessage('');
-    const msgs = await chatStorage.getMessages('chatId');
+    const msgs = await getMessages('chatId');
     setMessages(msgs ?? []);
   };
 
