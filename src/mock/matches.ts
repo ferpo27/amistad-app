@@ -1,55 +1,53 @@
-import type { LanguageCode, LanguageLevel } from "../storage";
+/**
+ * src/mock/matches.ts
+ * Tipos base para perfiles de match/conexión.
+ * botReply.ts hace module augmentation sobre este archivo — no modificar la interfaz base.
+ */
 
-export type MatchProfile = {
+export interface MatchProfile {
   id: string;
   name: string;
   country: string;
-  nativeLang: LanguageCode;
-  learning: { lang: LanguageCode; level: LanguageLevel }[];
-  interests: string[];
-  bio: string;
-  photos: string[];
-};
+  nativeLang: string;
+  targetLang?: string;
+  interests?: string[];
+  bio?: string;
+  avatar?: string;
+  age?: number;
+  isOnline?: boolean;
+}
 
-export const MATCHES: MatchProfile[] = [
+export const mockMatches: MatchProfile[] = [
   {
-    id: "anna_de",
-    name: "Anna",
-    country: "Germany",
-    nativeLang: "de",
-    learning: [{ lang: "es", level: "B1" }],
-    interests: ["gym", "architecture", "travel"],
-    bio: "Architecture student from Berlin.",
-    photos: [],
-  },
-  {
-    id: "hiro_ja",
-    name: "Hiro",
+    id: "mock-1",
+    name: "Yuki",
     country: "Japan",
     nativeLang: "ja",
-    learning: [{ lang: "en", level: "B2" }],
-    interests: ["anime", "technology", "finance"],
-    bio: "Interested in global markets and culture.",
-    photos: [],
+    targetLang: "es",
+    interests: ["anime", "cooking", "travel"],
+    bio: "Looking to practice Spanish!",
+    isOnline: true,
   },
   {
-    id: "li_zh",
-    name: "Li",
-    country: "China",
-    nativeLang: "zh",
-    learning: [{ lang: "en", level: "A2" }],
-    interests: ["food", "culture", "travel"],
-    bio: "I love exploring international cuisines.",
-    photos: [],
+    id: "mock-2",
+    name: "Carlos",
+    country: "Mexico",
+    nativeLang: "es",
+    targetLang: "en",
+    interests: ["music", "soccer", "movies"],
+    bio: "Quiero mejorar mi inglés.",
+    isOnline: false,
   },
   {
-    id: "ivan_ru",
-    name: "Ivan",
-    country: "Russia",
-    nativeLang: "ru",
-    learning: [{ lang: "es", level: "A1" }],
-    interests: ["history", "philosophy", "gym"],
-    bio: "Interested in philosophy and languages.",
-    photos: [],
+    id: "mock-3",
+    name: "Sophie",
+    country: "France",
+    nativeLang: "fr",
+    targetLang: "es",
+    interests: ["art", "literature", "coffee"],
+    bio: "J'apprends l'espagnol.",
+    isOnline: true,
   },
 ];
+
+export default mockMatches;
