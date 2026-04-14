@@ -10,13 +10,13 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "target": "esnext",
-    "module": "esnext",
-    "lib": ["esnext"],
+    "ignoreDeprecations": "5.0",
+    "target": "ESNext",
+    "module": "ESNext",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
-      "*": ["node_modules/*"]
+      "@/*": ["./*"]
     }
   },
   "include": [
@@ -27,9 +27,9 @@
     ".expo/types/**/*.ts"
   ],
   "exclude": [
-  "node_modules",
-  "babel.config.js", 
-  "translator-api",
-  "amistad-app"
- ]
+    "node_modules",
+    "babel.config.js",
+    "translator-api",
+    "amistad-app"
+  ]
 }

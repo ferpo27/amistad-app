@@ -1,7 +1,7 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
-import { useThemeMode } from "../../theme";
+import { useTheme } from "../../theme";
 
 export type ChatMessage = {
   id: string;
@@ -9,15 +9,16 @@ export type ChatMessage = {
   from: "me" | "them";
   ts?: number;
   status?: "sent" | "delivered" | "seen";
+  audioUrl?: string;
 };
 
 type Props = {
   msg: ChatMessage;
-  onPressThemMessage?: (text: string) => void; // abre traductor
+  onPressThemMessage?: (text: string) => void;
 };
 
 export default function MessageBubble({ msg, onPressThemMessage }: Props) {
-  const { colors } = useThemeMode();
+  const { colors } = useTheme();
   const isMe = msg.from === "me";
 
   const bubbleBg = isMe ? colors.accent : colors.card;
@@ -39,6 +40,8 @@ export default function MessageBubble({ msg, onPressThemMessage }: Props) {
               onPressThemMessage?.(msg.text);
             }
           }}
+          accessibilityRole="button"
+          accessibilityLabel={isMe ? "Tu mensaje" : "Mensaje recibido, tocá para traducir"}
           style={{
             maxWidth: "86%",
             backgroundColor: bubbleBg,
@@ -47,7 +50,6 @@ export default function MessageBubble({ msg, onPressThemMessage }: Props) {
             paddingHorizontal: 14,
             paddingVertical: 12,
             borderRadius: 18,
-            // “forma pro” tipo chat moderno
             borderTopLeftRadius: isMe ? 18 : 6,
             borderTopRightRadius: isMe ? 6 : 18,
             shadowColor: "#000",
@@ -61,11 +63,10 @@ export default function MessageBubble({ msg, onPressThemMessage }: Props) {
             {msg.text}
           </Text>
 
-          {/* mini status (solo para mi) */}
           {isMe ? (
             <View style={{ marginTop: 6, alignItems: "flex-end" }}>
               <Text style={{ color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: "800" }}>
-                {msg.status === "seen" ? "Seen" : msg.status === "delivered" ? "Delivered" : "Sent"}
+                {msg.status === "seen" ? "Visto" : msg.status === "delivered" ? "Entregado" : "Enviado"}
               </Text>
             </View>
           ) : null}
