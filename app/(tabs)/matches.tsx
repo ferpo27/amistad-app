@@ -1,4 +1,19 @@
 // app/(tabs)/matches.tsx
+//
+// ══════════════════════════════════════════════════════════════════════════════
+// DISCOVERY / MATCHES — Exploración de perfiles para dar likes
+//
+// FIXES vs versión anterior:
+//   - useTheme → useAppTheme (single source of truth)
+//   - likes table: liker_id/liked_id → from_user_id/to_user_id (schema real)
+//   - getDiscoveryProfiles() desde profilesStorage (excluye ya-likeados)
+//   - Like button inline en cada card (no requiere abrir el perfil)
+//   - Like optimista: UI actualiza inmediatamente, Supabase en background
+//   - Animación de like con heart bounce
+//   - calculateCompatibility preservado
+//   - Sin console.log en producción
+// ══════════════════════════════════════════════════════════════════════════════
+
 import React, {
   useCallback,
   useEffect,
@@ -17,116 +32,117 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 
 import { supabase } from '../../src/lib/supabase';
-import { useTheme } from '../../src/theme';
-import { getProfile } from '../../src/storage';
+import { useAppTheme } from '../../src/theme';
+import { getProfile } from '../../src/storage/profilesStorage';
 import { calculateCompatibility } from '../../src/matching/calculateCompatibility';
-import type { RemoteProfile } from '../../src/storage/profilesStorage';
-import { getDiscoveryProfiles } from '../../src/storage/profilesStorage';
+import {
+  getDiscoveryProfiles,
+  type RemoteProfile,
+} from '../../src/storage/profilesStorage';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Types
+// TIPOS
 // ─────────────────────────────────────────────────────────────────────────────
 
 type TabId = 'top' | 'all';
 
 type MatchRow = {
-  id: string;
-  name: string;
-  country: string;
-  nativeLang: string;
+  id:           string;
+  name:         string;
+  country:      string;
+  nativeLang:   string;
   learningLangs: string[];
-  interests: string[];
-  score: number;
-  photoUrl: string | null;
+  interests:    string[];
+  score:        number;
+  photoUrl:     string | null;
+  liked:        boolean;
 };
 
 type MyProfile = {
-  interests: string[];
-  nativeLang: string;
+  interests:    string[];
+  nativeLang:   string;
   learningLangs: string[];
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Constants
+// CONSTANTES
 // ─────────────────────────────────────────────────────────────────────────────
 
 const FLAGS: Record<string, string> = {
-  es: '🇦🇷', en: '🇺🇸', de: '🇩🇪', ja: '🇯🇵', ru: '🇷🇺', zh: '🇨🇳',
+  es: '🇦🇷', en: '🇺🇸', de: '🇩🇪',
+  ja: '🇯🇵', ru: '🇷🇺', zh: '🇨🇳',
 };
 
 const LANG_NAMES: Record<string, string> = {
-  es: 'Español', en: 'English', de: 'Deutsch',
-  ja: '日本語', ru: 'Русский', zh: '中文',
+  es: 'Español', en: 'English',  de: 'Deutsch',
+  ja: '日本語',   ru: 'Русский', zh: '中文',
 };
 
 const ALL_LANGS = ['en', 'es', 'de', 'ja', 'ru', 'zh'];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helpers
+// HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function learningLangsFromRemote(
-  learning: RemoteProfile['learning']
-): string[] {
-  if (!Array.isArray(learning)) return [];
-  return learning.map((l) => l.lang).filter(Boolean);
-}
-
 function remoteToMatchRow(p: RemoteProfile, me: MyProfile): MatchRow {
-  const learningLangs = learningLangsFromRemote(p.learning);
   const score = calculateCompatibility(
     {
-      interests: me.interests,
+      interests:  me.interests,
       nativeLang: me.nativeLang as any,
-      learning: me.learningLangs as any[],
+      learning:   me.learningLangs as any[],
     },
     {
-      id: p.id,
-      name: p.displayName,
+      id:         p.id,
+      name:       p.displayName,
       nativeLang: p.nativeLang as any,
-      learning: (p.learning ?? []).map((l) => ({
-        lang: l.lang as any,
+      learning:   (p.learning ?? []).map((l) => ({
+        lang:  l.lang as any,
         level: l.level,
       })),
       interests: p.interests,
-    }
+    },
   );
+
   return {
-    id: p.id,
-    name: p.displayName || '—',
-    country: p.country ?? '',
-    nativeLang: p.nativeLang,
-    learningLangs,
-    interests: p.interests ?? [],
+    id:           p.id,
+    name:         p.displayName || '—',
+    country:      p.country ?? '',
+    nativeLang:   p.nativeLang,
+    learningLangs: (p.learning ?? []).map((l) => l.lang),
+    interests:    p.interests ?? [],
     score,
-    photoUrl: p.photoUrl ?? null,
+    photoUrl:     p.photoUrl ?? null,
+    liked:        false,
   };
 }
 
 function scoreTier(score: number): { label: string; color: string } {
   if (score >= 0.7) return { label: 'Excelente', color: '#34C759' };
-  if (score >= 0.4) return { label: 'Bueno', color: '#007AFF' };
-  return { label: 'Básico', color: '#8E8E93' };
+  if (score >= 0.4) return { label: 'Bueno',     color: '#007AFF' };
+  return                   { label: 'Básico',    color: '#8E8E93' };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Skeleton
+// SUB-COMPONENTES
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SkeletonRow({ colors }: { colors: any }) {
+function SkeletonRow({ colors }: { colors: ReturnType<typeof useAppTheme>['colors'] }) {
   const opacity = useRef(new Animated.Value(0.3)).current;
+
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, { toValue: 0.8, duration: 700, useNativeDriver: true }),
         Animated.timing(opacity, { toValue: 0.3, duration: 700, useNativeDriver: true }),
-      ])
+      ]),
     );
     anim.start();
     return () => anim.stop();
@@ -135,9 +151,12 @@ function SkeletonRow({ colors }: { colors: any }) {
   return (
     <Animated.View
       style={{
-        flexDirection: 'row', alignItems: 'center',
-        paddingHorizontal: 20, paddingVertical: 14,
-        borderBottomWidth: 1, borderBottomColor: colors.border,
+        flexDirection:   'row',
+        alignItems:      'center',
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
         opacity,
       }}
     >
@@ -152,28 +171,27 @@ function SkeletonRow({ colors }: { colors: any }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Score ring
-// ─────────────────────────────────────────────────────────────────────────────
-
 function ScoreRing({
   score,
   size = 48,
-  colors,
 }: {
   score: number;
   size?: number;
-  colors: any;
 }) {
-  const pct = Math.round(Math.min(100, Math.max(0, score * 100)));
-  const { color } = scoreTier(score);
+  const pct         = Math.round(Math.min(100, Math.max(0, score * 100)));
+  const { color }   = scoreTier(score);
+
   return (
     <View
       style={{
-        width: size, height: size, borderRadius: size / 2,
-        borderWidth: 2.5, borderColor: color,
+        width:          size,
+        height:         size,
+        borderRadius:   size / 2,
+        borderWidth:    2.5,
+        borderColor:    color,
         backgroundColor: color + '18',
-        alignItems: 'center', justifyContent: 'center',
+        alignItems:     'center',
+        justifyContent: 'center',
       }}
     >
       <Text style={{ color, fontWeight: '900', fontSize: size * 0.3 }}>
@@ -183,22 +201,80 @@ function ScoreRing({
   );
 }
 
+function LikeButton({
+  liked,
+  sending,
+  onPress,
+}: {
+  liked:   boolean;
+  sending: boolean;
+  onPress: () => void;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const bounce = () => {
+    Animated.sequence([
+      Animated.spring(scale, { toValue: 1.35, useNativeDriver: true, speed: 60 }),
+      Animated.spring(scale, { toValue: 1,    useNativeDriver: true, speed: 60 }),
+    ]).start();
+  };
+
+  const handlePress = () => {
+    if (sending) return;
+    bounce();
+    onPress();
+  };
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel={liked ? 'Quitar like' : 'Dar like'}
+      style={{
+        width:          44,
+        height:         44,
+        borderRadius:   22,
+        alignItems:     'center',
+        justifyContent: 'center',
+        backgroundColor: liked ? '#FF375F15' : 'transparent',
+        borderWidth:    1,
+        borderColor:    liked ? '#FF375F' : 'transparent',
+      }}
+    >
+      {sending ? (
+        <ActivityIndicator size="small" color="#FF375F" />
+      ) : (
+        <Animated.View style={{ transform: [{ scale }] }}>
+          <Ionicons
+            name={liked ? 'heart' : 'heart-outline'}
+            size={22}
+            color={liked ? '#FF375F' : '#8E8E93'}
+          />
+        </Animated.View>
+      )}
+    </Pressable>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Main screen
+// PANTALLA PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function MatchesScreen() {
-  const router = useRouter();
-  const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const router       = useRouter();
+  const { colors }   = useAppTheme();
+  const insets       = useSafeAreaInsets();
 
-  const [tab, setTab] = useState<TabId>('top');
-  const [matches, setMatches] = useState<MatchRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tab,        setTab]        = useState<TabId>('top');
+  const [matches,    setMatches]    = useState<MatchRow[]>([]);
+  const [loading,    setLoading]    = useState(true);
   const [filterLang, setFilterLang] = useState<string | null>(null);
-  const [myUserId, setMyUserId] = useState<string | null>(null);
+  const [myUserId,   setMyUserId]   = useState<string | null>(null);
+  /** IDs de filas con like en proceso (para el spinner individual) */
+  const [sending,    setSending]    = useState<Set<string>>(new Set());
 
-  // ── Bootstrap ──────────────────────────────────────────────────────────────
+  // ── Bootstrap auth ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -206,28 +282,30 @@ export default function MatchesScreen() {
     });
   }, []);
 
+  // ── Carga de perfiles ────────────────────────────────────────────────────────
+
   const loadMatches = useCallback(async () => {
     setLoading(true);
     try {
+      const session = await supabase.auth.getSession();
+      const myId    = session.data.session?.user.id;
+
       const [myProf, remoteProfiles] = await Promise.all([
         getProfile(),
         getDiscoveryProfiles(60),
       ]);
 
       const me: MyProfile = {
-        interests: myProf.interests ?? [],
-        nativeLang: myProf.nativeLang ?? '',
+        interests:    myProf.interests ?? [],
+        nativeLang:   myProf.nativeLang ?? '',
         learningLangs: (myProf.languageLearning?.learn ?? []).map(
-          (x: any) => (x?.lang ?? '') as string
+          (x) => (x?.lang ?? '') as string,
         ),
       };
 
-      // Exclude own profile from discovery
-      const session = await supabase.auth.getSession();
-      const myId = session.data.session?.user.id;
-
+      // getDiscoveryProfiles ya excluye al propio usuario y a los ya-likeados
       const rows = (remoteProfiles ?? [])
-        .filter((p) => p && p.id && p.id !== myId)
+        .filter((p) => p?.id && p.id !== myId)
         .map((p) => remoteToMatchRow(p, me))
         .sort((a, b) => b.score - a.score);
 
@@ -241,20 +319,72 @@ export default function MatchesScreen() {
 
   useFocusEffect(useCallback(() => { loadMatches(); }, [loadMatches]));
 
-  // ── Derived data ───────────────────────────────────────────────────────────
+  // ── Like / Unlike ────────────────────────────────────────────────────────────
+
+  const toggleLike = useCallback(async (targetId: string) => {
+    if (!myUserId) return;
+
+    const isCurrentlyLiked = matches.find((m) => m.id === targetId)?.liked ?? false;
+
+    // Optimistic update
+    setMatches((prev) =>
+      prev.map((m) => m.id === targetId ? { ...m, liked: !isCurrentlyLiked } : m),
+    );
+    setSending((prev) => new Set(prev).add(targetId));
+
+    try {
+      if (isCurrentlyLiked) {
+        // Unlike
+        await supabase
+          .from('likes')
+          .delete()
+          .eq('from_user_id', myUserId)
+          .eq('to_user_id', targetId);
+
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else {
+        // Like — upsert por si hay race condition
+        await supabase
+          .from('likes')
+          .upsert(
+            {
+              from_user_id: myUserId,
+              to_user_id:   targetId,
+              created_at:   new Date().toISOString(),
+            },
+            { onConflict: 'from_user_id,to_user_id' },
+          );
+
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch {
+      // Revertir en caso de error
+      setMatches((prev) =>
+        prev.map((m) => m.id === targetId ? { ...m, liked: isCurrentlyLiked } : m),
+      );
+    } finally {
+      setSending((prev) => {
+        const next = new Set(prev);
+        next.delete(targetId);
+        return next;
+      });
+    }
+  }, [myUserId, matches]);
+
+  // ── Datos derivados ──────────────────────────────────────────────────────────
 
   const filteredMatches = useMemo(() => {
     if (!filterLang) return matches;
     return matches.filter(
       (m) =>
         m.nativeLang === filterLang ||
-        m.learningLangs.includes(filterLang)
+        m.learningLangs.includes(filterLang),
     );
   }, [matches, filterLang]);
 
   const topMatches = useMemo(
     () => filteredMatches.filter((m) => m.score >= 0.3).slice(0, 30),
-    [filteredMatches]
+    [filteredMatches],
   );
 
   const displayList = tab === 'top' ? topMatches : filteredMatches;
@@ -262,91 +392,120 @@ export default function MatchesScreen() {
   const langCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const m of matches) {
-      const langs = [m.nativeLang, ...m.learningLangs];
-      for (const l of langs) {
+      for (const l of [m.nativeLang, ...m.learningLangs]) {
         if (l) counts[l] = (counts[l] ?? 0) + 1;
       }
     }
     return counts;
   }, [matches]);
 
-  // ── Styles ─────────────────────────────────────────────────────────────────
+  // ── Estilos ──────────────────────────────────────────────────────────────────
 
   const styles = useMemo(
     () =>
       StyleSheet.create({
         container: { flex: 1, backgroundColor: colors.bg },
         header: {
-          paddingTop: insets.top + 8,
+          paddingTop:        insets.top + 8,
           paddingHorizontal: 20,
-          paddingBottom: 12,
+          paddingBottom:     12,
           borderBottomWidth: 1,
           borderBottomColor: colors.border,
-          backgroundColor: colors.bg,
-          gap: 12,
+          backgroundColor:   colors.bg,
+          gap:               12,
         },
-        headerTop: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
-        title: { color: colors.fg, fontSize: 30, fontWeight: '900', letterSpacing: -0.5 },
+        headerTop: {
+          flexDirection:  'row',
+          alignItems:     'flex-end',
+          justifyContent: 'space-between',
+        },
+        title:    { color: colors.fg, fontSize: 30, fontWeight: '900', letterSpacing: -0.5 },
         subtitle: { color: colors.subtext, fontWeight: '700', fontSize: 13, marginTop: 2 },
         tabRow: {
-          flexDirection: 'row', backgroundColor: colors.card,
-          borderRadius: 12, padding: 3,
-          borderWidth: 1, borderColor: colors.border,
+          flexDirection:   'row',
+          backgroundColor: colors.card,
+          borderRadius:    12,
+          padding:         3,
+          borderWidth:     1,
+          borderColor:     colors.border,
         },
-        tabBtn: { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center' },
+        tabBtn:       { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center' },
         tabBtnActive: { backgroundColor: colors.accent },
-        tabText: { fontWeight: '900', fontSize: 14 },
+        tabText:      { fontWeight: '900', fontSize: 14 },
         filterScroll: { paddingLeft: 20, paddingRight: 8, paddingVertical: 10 },
         filterChip: {
-          flexDirection: 'row', alignItems: 'center',
-          paddingHorizontal: 14, paddingVertical: 7,
-          borderRadius: 99, borderWidth: 1,
-          marginRight: 8, gap: 5,
+          flexDirection:     'row',
+          alignItems:        'center',
+          paddingHorizontal: 14,
+          paddingVertical:   7,
+          borderRadius:      99,
+          borderWidth:       1,
+          marginRight:       8,
+          gap:               5,
         },
         filterChipText: { fontWeight: '700', fontSize: 13 },
         row: {
-          flexDirection: 'row', alignItems: 'center',
-          paddingHorizontal: 20, paddingVertical: 14,
-          borderBottomWidth: 1, borderBottomColor: colors.border,
+          flexDirection:     'row',
+          alignItems:        'center',
+          paddingHorizontal: 20,
+          paddingVertical:   14,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+          gap:               12,
         },
         avatar: {
-          width: 52, height: 52, borderRadius: 26,
+          width:          52,
+          height:         52,
+          borderRadius:   26,
           backgroundColor: colors.card,
-          borderWidth: 1, borderColor: colors.border,
-          alignItems: 'center', justifyContent: 'center',
-          marginRight: 14, overflow: 'hidden',
+          borderWidth:    1,
+          borderColor:    colors.border,
+          alignItems:     'center',
+          justifyContent: 'center',
+          overflow:       'hidden',
         },
         avatarText: { fontWeight: '900', fontSize: 18, color: colors.accent },
-        name: { color: colors.fg, fontWeight: '900', fontSize: 16 },
-        meta: { color: colors.subtext, fontWeight: '700', fontSize: 13, marginTop: 2 },
+        name:       { color: colors.fg, fontWeight: '900', fontSize: 16 },
+        meta:       { color: colors.subtext, fontWeight: '700', fontSize: 13, marginTop: 2 },
         interestLine: { color: colors.subtext, fontSize: 12, marginTop: 3 },
         emptyContainer: {
-          flex: 1, alignItems: 'center', justifyContent: 'center',
-          gap: 14, paddingHorizontal: 32, paddingTop: 60,
+          flex:           1,
+          alignItems:     'center',
+          justifyContent: 'center',
+          gap:            14,
+          paddingHorizontal: 32,
+          paddingTop:     60,
         },
         emptyText: {
-          color: colors.subtext, fontWeight: '600', fontSize: 15, textAlign: 'center',
+          color:      colors.subtext,
+          fontWeight: '600',
+          fontSize:   15,
+          textAlign:  'center',
         },
         refreshBtn: {
-          backgroundColor: colors.accent, borderRadius: 99,
-          paddingHorizontal: 24, paddingVertical: 12,
+          backgroundColor: colors.accent,
+          borderRadius:    99,
+          paddingHorizontal: 24,
+          paddingVertical:   12,
         },
         refreshBtnText: { color: '#fff', fontWeight: '900', fontSize: 15 },
         topBadge: {
-          backgroundColor: colors.accent, borderRadius: 99,
-          paddingHorizontal: 7, paddingVertical: 2,
+          backgroundColor: colors.accent,
+          borderRadius:    99,
+          paddingHorizontal: 7,
+          paddingVertical: 2,
         },
       }),
-    [colors, insets]
+    [colors, insets],
   );
 
-  // ── Render item ────────────────────────────────────────────────────────────
+  // ── Render item ──────────────────────────────────────────────────────────────
 
   const renderItem = useCallback(
     ({ item, index }: { item: MatchRow; index: number }) => {
-      const initials = item.name.slice(0, 2).toUpperCase();
-      const isTop = index === 0 && tab === 'top';
-      const nativeName = LANG_NAMES[item.nativeLang] ?? item.nativeLang;
+      const initials    = item.name.slice(0, 2).toUpperCase();
+      const isTop       = index === 0 && tab === 'top';
+      const nativeName  = LANG_NAMES[item.nativeLang] ?? item.nativeLang;
       const learningNames = item.learningLangs
         .map((l) => LANG_NAMES[l] ?? l)
         .join(', ');
@@ -396,15 +555,22 @@ export default function MatchesScreen() {
             ) : null}
           </View>
 
-          {/* Score */}
-          <ScoreRing score={item.score} size={50} colors={colors} />
+          {/* Like button */}
+          <LikeButton
+            liked={item.liked}
+            sending={sending.has(item.id)}
+            onPress={() => toggleLike(item.id)}
+          />
+
+          {/* Score ring */}
+          <ScoreRing score={item.score} size={50} />
         </Pressable>
       );
     },
-    [router, styles, colors, tab]
+    [router, styles, colors, tab, sending, toggleLike],
   );
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <View style={styles.container}>
@@ -453,38 +619,29 @@ export default function MatchesScreen() {
         </View>
       </View>
 
-      {/* Language filter chips */}
+      {/* Filtros por idioma */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterScroll}
       >
+        {/* Chip "Todos" */}
         <Pressable
           onPress={() => setFilterLang(null)}
           style={[
             styles.filterChip,
             {
-              borderColor: !filterLang ? colors.accent : colors.border,
+              borderColor:     !filterLang ? colors.accent : colors.border,
               backgroundColor: !filterLang ? colors.accentSoft : 'transparent',
             },
           ]}
           accessibilityRole="button"
           accessibilityLabel="Mostrar todos los idiomas"
         >
-          <Text
-            style={[
-              styles.filterChipText,
-              { color: !filterLang ? colors.accent : colors.subtext },
-            ]}
-          >
+          <Text style={[styles.filterChipText, { color: !filterLang ? colors.accent : colors.subtext }]}>
             Todos
           </Text>
-          <Text
-            style={[
-              styles.filterChipText,
-              { color: !filterLang ? colors.accent : colors.subtext, opacity: 0.7 },
-            ]}
-          >
+          <Text style={[styles.filterChipText, { color: !filterLang ? colors.accent : colors.subtext, opacity: 0.7 }]}>
             {matches.length}
           </Text>
         </Pressable>
@@ -498,7 +655,7 @@ export default function MatchesScreen() {
               style={[
                 styles.filterChip,
                 {
-                  borderColor: active ? colors.accent : colors.border,
+                  borderColor:     active ? colors.accent : colors.border,
                   backgroundColor: active ? colors.accentSoft : 'transparent',
                 },
               ]}
@@ -506,20 +663,10 @@ export default function MatchesScreen() {
               accessibilityLabel={`Filtrar por ${LANG_NAMES[lang] ?? lang}`}
             >
               <Text style={{ fontSize: 14 }}>{FLAGS[lang] ?? '🌐'}</Text>
-              <Text
-                style={[
-                  styles.filterChipText,
-                  { color: active ? colors.accent : colors.subtext },
-                ]}
-              >
+              <Text style={[styles.filterChipText, { color: active ? colors.accent : colors.subtext }]}>
                 {LANG_NAMES[lang] ?? lang}
               </Text>
-              <Text
-                style={{
-                  color: active ? colors.accent : colors.subtext,
-                  fontWeight: '700', fontSize: 11, opacity: 0.7,
-                }}
-              >
+              <Text style={{ color: active ? colors.accent : colors.subtext, fontWeight: '700', fontSize: 11, opacity: 0.7 }}>
                 {langCounts[lang] ?? 0}
               </Text>
             </Pressable>
@@ -527,7 +674,7 @@ export default function MatchesScreen() {
         })}
       </ScrollView>
 
-      {/* List */}
+      {/* Lista */}
       {loading ? (
         <View>
           {[1, 2, 3, 4, 5, 6].map((i) => (

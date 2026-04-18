@@ -1,42 +1,95 @@
 // app/(tabs)/settings.tsx
 //
-// FIX: Reemplaza COLORS hardcodeados con useAppTheme() — single source of truth.
-// FIX: darkMode switch ahora persiste con setMode() de storage y afecta toda la app.
-// FIX: soundEnabled y notifications son preferencias de usuario (persisten en AsyncStorage).
+// ══════════════════════════════════════════════════════════════════════════════
+// AJUSTES
+//
+// CAMBIOS vs versión anterior:
+//   - Usa profilesStorage.getProfile() en lugar de supabase.from('profiles') directo
+//   - No más desincronización con profile.tsx — misma fuente de datos
+//   - Logout limpia el cache de profilesStorage
+//   - refreshProfile() al hacer focus
+//   - Indicador de sync status
+//   - clearAll() + clearProfileCache() en logout/delete para limpieza total
+// ══════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, Pressable,
-  StyleSheet, Switch, Alert, ActivityIndicator,
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+
 import { supabase } from '../../src/lib/supabase';
 import { clearAll, setAuthOk } from '../../src/storage';
 import { useAppTheme } from '../../src/theme';
+import {
+  refreshProfile,
+  clearProfileCache,
+  deleteRemoteProfile,
+  getSyncStatus,
+  type SyncStatus,
+} from '../../src/storage/profilesStorage';
 
-// Colores que no dependen del tema (estados semánticos fijos)
+// ─────────────────────────────────────────────────────────────────────────────
+// TIPOS LOCALES
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface DisplayProfile {
+  displayName: string;
+  email:        string;
+  nativeLang:   string;
+  learningLang: string;
+  level:        string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSTANTES
+// ─────────────────────────────────────────────────────────────────────────────
+
 const SUCCESS_COLOR = '#3DD68C';
 const WARNING_COLOR = '#FFB547';
 
-interface Profile {
-  full_name: string;
-  email: string;
-  native_language: string;
-  learning_language: string;
-  level: string;
-}
+const SYNC_COLORS: Record<SyncStatus, string> = {
+  synced:  SUCCESS_COLOR,
+  pending: WARNING_COLOR,
+  error:   '#FF5C5C',
+  offline: '#8A8A8E',
+};
+
+const SYNC_LABELS: Record<SyncStatus, string> = {
+  synced:  'Sincronizado',
+  pending: 'Guardando…',
+  error:   'Error de sync',
+  offline: 'Sin conexión',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUB-COMPONENTES
+// ─────────────────────────────────────────────────────────────────────────────
 
 function SettingRow({
-  icon, label, value, onPress, danger = false, rightElement, colors,
+  icon,
+  label,
+  value,
+  onPress,
+  danger = false,
+  rightElement,
+  colors,
 }: {
-  icon: string;
-  label: string;
-  value?: string;
-  onPress?: () => void;
-  danger?: boolean;
+  icon:         string;
+  label:        string;
+  value?:       string;
+  onPress?:     () => void;
+  danger?:      boolean;
   rightElement?: React.ReactNode;
-  colors: ReturnType<typeof useAppTheme>['colors'];
+  colors:       ReturnType<typeof useAppTheme>['colors'];
 }) {
   return (
     <Pressable
@@ -49,7 +102,11 @@ function SettingRow({
       <View
         style={[
           styles.rowIcon,
-          { backgroundColor: danger ? 'rgba(255,92,92,0.15)' : colors.accentSoft },
+          {
+            backgroundColor: danger
+              ? 'rgba(255,92,92,0.15)'
+              : colors.accentSoft,
+          },
         ]}
       >
         <Ionicons
@@ -78,39 +135,81 @@ function SectionHeader({ title, color }: { title: string; color: string }) {
   return <Text style={[styles.sectionTitle, { color }]}>{title}</Text>;
 }
 
-export default function SettingsScreen() {
-  const router = useRouter();
-  const { colors, isDark, mode, setMode } = useAppTheme();
+function SyncStatusBar({
+  status,
+  colors,
+}: {
+  status: SyncStatus;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+}) {
+  if (status === 'synced') return null;
 
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  return (
+    <View
+      style={[
+        styles.syncBar,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+    >
+      <View
+        style={[styles.syncDot, { backgroundColor: SYNC_COLORS[status] }]}
+      />
+      <Text style={[styles.syncLabel, { color: colors.text }]}>
+        {SYNC_LABELS[status]}
+      </Text>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PANTALLA PRINCIPAL
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function SettingsScreen() {
+  const router   = useRouter();
+  const { colors, isDark, setMode } = useAppTheme();
+
+  const [profile,       setProfile]       = useState<DisplayProfile | null>(null);
+  const [loading,       setLoading]       = useState(true);
   const [notifications, setNotifications] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled,  setSoundEnabled]  = useState(true);
+  const [syncStatus,    setSyncStatus]    = useState<SyncStatus>('synced');
+
+  // ── Carga del perfil ────────────────────────────────────────────────────────
+  // Fuente única: profilesStorage.getProfile() — mismo cache que profile.tsx
 
   const fetchProfile = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase
-        .from('profiles')
-        .select('full_name, native_language, learning_language, level')
-        .eq('id', user.id)
-        .single();
+      const [prof, status, { data: authData }] = await Promise.all([
+        refreshProfile(),
+        getSyncStatus(),
+        supabase.auth.getUser(),
+      ]);
+
+      const primaryLang = prof.languageLearning?.learn?.[0] ?? null;
+
       setProfile({
-        full_name: data?.full_name ?? 'Usuario',
-        email: user.email ?? '',
-        native_language: data?.native_language ?? '',
-        learning_language: data?.learning_language ?? '',
-        level: data?.level ?? '',
+        displayName: prof.displayName ?? 'Usuario',
+        email:       authData.user?.email ?? '',
+        nativeLang:  prof.nativeLang ?? '',
+        learningLang: primaryLang?.lang ?? '',
+        level:        primaryLang?.level ?? '',
       });
-    } catch (e) {
-      console.error('fetchProfile error:', e);
+
+      setSyncStatus(status);
+    } catch {
+      // No rompemos la pantalla si falla el fetch
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { fetchProfile(); }, [fetchProfile]));
+  useFocusEffect(useCallback(() => {
+    setLoading(true);
+    fetchProfile();
+  }, [fetchProfile]));
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
 
   const handleDarkModeToggle = async (value: boolean) => {
     await setMode(value ? 'dark' : 'light');
@@ -125,6 +224,7 @@ export default function SettingsScreen() {
         onPress: async () => {
           await supabase.auth.signOut();
           await setAuthOk(false);
+          await clearProfileCache(); // limpia el cache de profilesStorage
           router.replace('/login' as any);
         },
       },
@@ -134,13 +234,15 @@ export default function SettingsScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Eliminar cuenta',
-      'Esta acción es irreversible. ¿Estás seguro?',
+      'Esta acción es irreversible. Se borrarán todos tus datos. ¿Estás seguro?',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
-          text: 'Eliminar',
+          text:  'Eliminar',
           style: 'destructive',
           onPress: async () => {
+            // Borra datos locales + registro en Supabase + logout
+            await deleteRemoteProfile();
             await clearAll();
             await supabase.auth.signOut();
             router.replace('/login' as any);
@@ -150,13 +252,19 @@ export default function SettingsScreen() {
     );
   };
 
+  // ── Derivados ───────────────────────────────────────────────────────────────
+
   const initials =
-    profile?.full_name
+    profile?.displayName
       ?.split(' ')
       .map((w) => w[0])
       .join('')
       .slice(0, 2)
       .toUpperCase() ?? '?';
+
+  const switchTrack = { false: colors.border, true: colors.accentSoft };
+
+  // ── Loading ─────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -166,7 +274,7 @@ export default function SettingsScreen() {
     );
   }
 
-  const switchTrack = { false: colors.border, true: colors.accentSoft };
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <ScrollView
@@ -178,58 +286,67 @@ export default function SettingsScreen() {
         <Text style={[styles.title, { color: colors.text }]}>Configuración</Text>
       </View>
 
+      {/* Sync status (solo si no está synced) */}
+      <SyncStatusBar status={syncStatus} colors={colors} />
+
       {/* Perfil Card */}
       <Pressable
         style={({ pressed }) => [
           styles.profileCard,
           {
             backgroundColor: colors.card,
-            borderColor: colors.border,
+            borderColor:     colors.border,
           },
           pressed && { opacity: 0.85 },
         ]}
-        onPress={() => router.push('/profile/edit' as any)}
+        onPress={() => router.push('/onboarding' as any)}
       >
-        <View style={[styles.avatar, { backgroundColor: colors.accentSoft }]}>
+        <View style={[styles.avatarCircle, { backgroundColor: colors.accentSoft }]}>
           <Text style={[styles.avatarText, { color: colors.accent }]}>{initials}</Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.profileName, { color: colors.text }]}>
-            {profile?.full_name}
+            {profile?.displayName}
           </Text>
           <Text style={[styles.profileEmail, { color: colors.subtext }]}>
             {profile?.email}
           </Text>
-          {profile?.native_language ? (
+          {profile?.nativeLang ? (
             <Text style={[styles.profileLangs, { color: colors.accent }]}>
-              🗣 {profile.native_language} → 📖 {profile.learning_language} · {profile.level}
+              🗣 {profile.nativeLang}
+              {profile.learningLang ? ` → 📖 ${profile.learningLang}` : ''}
+              {profile.level ? ` · ${profile.level}` : ''}
             </Text>
           ) : null}
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.subtext} />
       </Pressable>
 
-      {/* Idiomas */}
+      {/* ── IDIOMAS ── */}
       <SectionHeader title="IDIOMAS" color={colors.subtext} />
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SettingRow
           icon="language-outline"
           label="Idioma nativo"
-          value={profile?.native_language || 'No configurado'}
-          onPress={() => router.push('/profile/edit' as any)}
+          value={profile?.nativeLang || 'No configurado'}
+          onPress={() => router.push('/onboarding' as any)}
           colors={colors}
         />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <SettingRow
           icon="school-outline"
           label="Idioma que aprendés"
-          value={`${profile?.learning_language || 'No configurado'}${profile?.level ? ` · ${profile.level}` : ''}`}
-          onPress={() => router.push('/profile/edit' as any)}
+          value={
+            profile?.learningLang
+              ? `${profile.learningLang}${profile.level ? ` · ${profile.level}` : ''}`
+              : 'No configurado'
+          }
+          onPress={() => router.push('/onboarding' as any)}
           colors={colors}
         />
       </View>
 
-      {/* Preferencias */}
+      {/* ── PREFERENCIAS ── */}
       <SectionHeader title="PREFERENCIAS" color={colors.subtext} />
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SettingRow
@@ -275,7 +392,7 @@ export default function SettingsScreen() {
         />
       </View>
 
-      {/* Privacidad */}
+      {/* ── PRIVACIDAD ── */}
       <SectionHeader title="PRIVACIDAD Y SEGURIDAD" color={colors.subtext} />
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SettingRow
@@ -300,7 +417,7 @@ export default function SettingsScreen() {
         />
       </View>
 
-      {/* Soporte */}
+      {/* ── SOPORTE ── */}
       <SectionHeader title="SOPORTE" color={colors.subtext} />
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SettingRow
@@ -325,7 +442,7 @@ export default function SettingsScreen() {
         />
       </View>
 
-      {/* Cuenta */}
+      {/* ── CUENTA ── */}
       <SectionHeader title="CUENTA" color={colors.subtext} />
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SettingRow
@@ -350,6 +467,10 @@ export default function SettingsScreen() {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ESTILOS
+// ─────────────────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center:    { alignItems: 'center', justifyContent: 'center' },
@@ -357,22 +478,35 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 8 },
   title:  { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
 
+  syncBar: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             8,
+    marginHorizontal: 16,
+    marginTop:       8,
+    padding:         10,
+    borderRadius:    10,
+    borderWidth:     1,
+  },
+  syncDot:   { width: 8, height: 8, borderRadius: 4 },
+  syncLabel: { fontSize: 12, fontWeight: '600' },
+
   profileCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
+    alignItems:    'center',
+    borderRadius:  16,
     marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
-    padding: 16,
-    gap: 14,
-    borderWidth: 1,
+    marginTop:     16,
+    marginBottom:  8,
+    padding:       16,
+    gap:           14,
+    borderWidth:   1,
   },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
+  avatarCircle: {
+    width:          56,
+    height:         56,
+    borderRadius:   28,
+    alignItems:     'center',
     justifyContent: 'center',
   },
   avatarText:    { fontSize: 20, fontWeight: '700' },
@@ -381,33 +515,33 @@ const styles = StyleSheet.create({
   profileLangs:  { fontSize: 12, marginTop: 5 },
 
   sectionTitle: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize:    11,
+    fontWeight:  '700',
     letterSpacing: 1.2,
-    marginTop: 24,
+    marginTop:   24,
     marginBottom: 8,
     marginHorizontal: 20,
   },
   section: {
     borderRadius: 16,
     marginHorizontal: 16,
-    borderWidth: 1,
-    overflow: 'hidden',
+    borderWidth:  1,
+    overflow:     'hidden',
   },
   divider: { height: 1, marginLeft: 56 },
 
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection:   'row',
+    alignItems:      'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    gap: 12,
+    gap:             12,
   },
   rowIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: 'center',
+    width:          34,
+    height:         34,
+    borderRadius:   10,
+    alignItems:     'center',
     justifyContent: 'center',
   },
   rowContent: { flex: 1 },

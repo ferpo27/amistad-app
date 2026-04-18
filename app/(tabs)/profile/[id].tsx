@@ -1,4 +1,19 @@
 // app/(tabs)/profile/[id].tsx
+//
+// ══════════════════════════════════════════════════════════════════════════════
+// PERFIL DUAL — Mi perfil (editable) o Perfil público (solo lectura)
+//
+// FIXES vs versión anterior:
+//   - useTheme → useAppTheme (single source of truth)
+//   - likes table: liker_id/liked_id → from_user_id/to_user_id (schema real)
+//   - getProfileById devuelve PublicProfileData, no RemoteProfile
+//   - MyProfileScreen usa profilesStorage (updateProfile, addStoryPhoto, etc.)
+//     en lugar de storage.ts directo — elimina la desincronización
+//   - Chat URL: router.push(`/chat/${buildConversationId(myId, friendId)}`)
+//     en lugar de `/chat/${friendId}` (conversationId canónico)
+//   - Sin console.log en producción
+// ══════════════════════════════════════════════════════════════════════════════
+
 import React, {
   useCallback,
   useEffect,
@@ -12,7 +27,6 @@ import {
   Alert,
   Animated,
   AppState,
-  Dimensions,
   Image,
   Platform,
   Pressable,
@@ -34,47 +48,48 @@ import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { supabase } from '../../../src/lib/supabase';
-import { useTheme } from '../../../src/theme';
+import { useAppTheme } from '../../../src/theme';
+import type { LearningLang, StoryItem } from '../../../src/storage';
 import {
   getProfile,
   updateProfile,
   addStoryPhoto,
   removeStoryPhoto,
-  type LearningLang,
-  type StoryItem,
-} from '../../../src/storage';
-import {
+  refreshProfile,
   getProfileById,
-  type RemoteProfile,
+  type PublicProfileData,
 } from '../../../src/storage/profilesStorage';
 import { calculateCompatibility } from '../../../src/matching/calculateCompatibility';
 import SafetyButton from '../../../src/components/SafetyButton';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Constants
+// CONSTANTES
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { width: SCREEN_W } = Dimensions.get('window');
-
 const FLAGS: Record<string, string> = {
-  es: '🇪🇸', en: '🇺🇸', de: '🇩🇪', ja: '🇯🇵', ru: '🇷🇺', zh: '🇨🇳',
+  es: '🇦🇷', en: '🇺🇸', de: '🇩🇪',
+  ja: '🇯🇵', ru: '🇷🇺', zh: '🇨🇳',
 };
 
 const LANG_NAMES: Record<string, string> = {
-  es: 'Español', en: 'English', de: 'Deutsch',
-  ja: '日本語', ru: 'Русский', zh: '中文',
+  es: 'Español', en: 'English',  de: 'Deutsch',
+  ja: '日本語',   ru: 'Русский', zh: '中文',
 };
 
 const LEVEL_COLORS: Record<string, string> = {
   A1: '#34C759', A2: '#30D158',
   B1: '#007AFF', B2: '#0A84FF',
   C1: '#AF52DE', C2: '#BF5AF2',
-  Beginner: '#34C759', Intermediate: '#007AFF', Advanced: '#AF52DE',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared helpers
+// HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** conversationId canónico: menor UUID primero. Debe coincidir con buildConversationId.ts */
+function buildConversationId(a: string, b: string): string {
+  return [a, b].sort().join('_');
+}
 
 function timeLeft(expiresAt?: number): string | null {
   if (!expiresAt) return null;
@@ -85,33 +100,35 @@ function timeLeft(expiresAt?: number): string | null {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SUB-COMPONENTES COMPARTIDOS
+// ─────────────────────────────────────────────────────────────────────────────
+
 function CompatibilityRing({
   score,
   colors,
 }: {
-  score: number;
-  colors: ReturnType<typeof useTheme>['colors'];
+  score:  number;
+  colors: ReturnType<typeof useAppTheme>['colors'];
 }) {
-  const pct = Math.round(Math.min(100, Math.max(0, score * 100)));
-  const color =
-    pct >= 70 ? '#34C759' : pct >= 40 ? colors.accent : colors.subtext;
+  const pct   = Math.round(Math.min(100, Math.max(0, score * 100)));
+  const color = pct >= 70 ? '#34C759' : pct >= 40 ? colors.accent : colors.subtext;
+
   return (
     <View style={{ alignItems: 'center', gap: 4 }}>
       <View
         style={{
-          width: 60,
-          height: 60,
-          borderRadius: 30,
-          borderWidth: 3,
-          borderColor: color,
+          width:          60,
+          height:         60,
+          borderRadius:   30,
+          borderWidth:    3,
+          borderColor:    color,
           backgroundColor: color + '18',
-          alignItems: 'center',
+          alignItems:     'center',
           justifyContent: 'center',
         }}
       >
-        <Text style={{ color, fontWeight: '900', fontSize: 18 }}>
-          {pct}%
-        </Text>
+        <Text style={{ color, fontWeight: '900', fontSize: 18 }}>{pct}%</Text>
       </View>
       <Text style={{ color: colors.subtext, fontSize: 11, fontWeight: '700' }}>
         compatibles
@@ -125,35 +142,25 @@ function StatBadge({
   value,
   colors,
 }: {
-  label: string;
-  value: string;
-  colors: ReturnType<typeof useTheme>['colors'];
+  label:  string;
+  value:  string;
+  colors: ReturnType<typeof useAppTheme>['colors'];
 }) {
   return (
     <View
       style={{
-        flex: 1,
+        flex:           1,
         backgroundColor: colors.card,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: 14,
-        alignItems: 'center',
-        gap: 4,
+        borderRadius:   16,
+        borderWidth:    1,
+        borderColor:    colors.border,
+        padding:        14,
+        alignItems:     'center',
+        gap:            4,
       }}
     >
-      <Text style={{ color: colors.fg, fontWeight: '800', fontSize: 18 }}>
-        {value}
-      </Text>
-      <Text
-        style={{
-          color: colors.fg,
-          opacity: 0.4,
-          fontWeight: '600',
-          fontSize: 11,
-          textAlign: 'center',
-        }}
-      >
+      <Text style={{ color: colors.fg, fontWeight: '800', fontSize: 18 }}>{value}</Text>
+      <Text style={{ color: colors.fg, opacity: 0.4, fontWeight: '600', fontSize: 11, textAlign: 'center' }}>
         {label}
       </Text>
     </View>
@@ -165,21 +172,13 @@ function Section({
   children,
   colors,
 }: {
-  label: string;
+  label:    string;
   children: React.ReactNode;
-  colors: ReturnType<typeof useTheme>['colors'];
+  colors:   ReturnType<typeof useAppTheme>['colors'];
 }) {
   return (
     <View style={{ gap: 10 }}>
-      <Text
-        style={{
-          color: colors.fg,
-          opacity: 0.4,
-          fontWeight: '800',
-          fontSize: 11,
-          letterSpacing: 1.2,
-        }}
-      >
+      <Text style={{ color: colors.fg, opacity: 0.4, fontWeight: '800', fontSize: 11, letterSpacing: 1.2 }}>
         {label}
       </Text>
       {children}
@@ -193,32 +192,33 @@ function LangRow({
   label,
   colors,
 }: {
-  lang: string;
+  lang:   string;
   level?: string | null;
-  label: string;
-  colors: ReturnType<typeof useTheme>['colors'];
+  label:  string;
+  colors: ReturnType<typeof useAppTheme>['colors'];
 }) {
   const levelColor = (level && LEVEL_COLORS[level]) ?? colors.accent;
+
   return (
     <View
       style={{
         backgroundColor: colors.card,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
+        borderRadius:    14,
+        borderWidth:     1,
+        borderColor:     colors.border,
+        padding:         14,
+        flexDirection:   'row',
+        alignItems:      'center',
+        gap:             12,
       }}
     >
       <View
         style={{
-          width: 42,
-          height: 42,
-          borderRadius: 21,
+          width:          42,
+          height:         42,
+          borderRadius:   21,
           backgroundColor: levelColor + '20',
-          alignItems: 'center',
+          alignItems:     'center',
           justifyContent: 'center',
         }}
       >
@@ -228,29 +228,13 @@ function LangRow({
         <Text style={{ color: colors.fg, fontWeight: '700', fontSize: 15 }}>
           {LANG_NAMES[lang] ?? lang}
         </Text>
-        <Text
-          style={{
-            color: colors.subtext,
-            fontWeight: '600',
-            fontSize: 12,
-            marginTop: 1,
-          }}
-        >
+        <Text style={{ color: colors.subtext, fontWeight: '600', fontSize: 12, marginTop: 1 }}>
           {label}
         </Text>
       </View>
-      {level ? (
-        <View
-          style={{
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            borderRadius: 99,
-            backgroundColor: levelColor + '20',
-          }}
-        >
-          <Text style={{ color: levelColor, fontWeight: '800', fontSize: 12 }}>
-            {level}
-          </Text>
+      {level && level !== 'Nativo' ? (
+        <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, backgroundColor: levelColor + '20' }}>
+          <Text style={{ color: levelColor, fontWeight: '800', fontSize: 12 }}>{level}</Text>
         </View>
       ) : null}
     </View>
@@ -258,30 +242,31 @@ function LangRow({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC profile view
+// VISTA PÚBLICA DEL PERFIL (otro usuario)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function PublicProfileScreen({ friendId }: { friendId: string }) {
-  const router = useRouter();
+  const router     = useRouter();
   const navigation = useNavigation();
-  const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const { colors } = useAppTheme();
+  const insets     = useSafeAreaInsets();
+  const scrollY    = useRef(new Animated.Value(0)).current;
 
-  const [profile, setProfile] = useState<RemoteProfile | null>(null);
-  const [myProfile, setMyProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [liked, setLiked] = useState(false);
+  const [profile,     setProfile]     = useState<PublicProfileData | null>(null);
+  const [myProfile,   setMyProfile]   = useState<any>(null);
+  const [myUserId,    setMyUserId]    = useState<string | null>(null);
+  const [loading,     setLoading]     = useState(true);
+  const [liked,       setLiked]       = useState(false);
   const [likeSending, setLikeSending] = useState(false);
 
+  // Animaciones del scroll
   const headerOpacity = scrollY.interpolate({
-    inputRange: [80, 160],
+    inputRange:  [80, 160],
     outputRange: [0, 1],
     extrapolate: 'clamp',
   });
-
   const avatarScale = scrollY.interpolate({
-    inputRange: [-80, 0],
+    inputRange:  [-80, 0],
     outputRange: [1.25, 1],
     extrapolate: 'clamp',
   });
@@ -289,18 +274,18 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
   const compatibilityScore = useMemo(() => {
     if (!myProfile || !profile) return 0;
     const me = {
-      interests: myProfile.interests ?? [],
+      interests:  myProfile.interests ?? [],
       nativeLang: myProfile.nativeLang,
-      learning: (myProfile.languageLearning?.learn ?? []).map(
-        (x: LearningLang) => x.lang
+      learning:   (myProfile.languageLearning?.learn ?? []).map(
+        (x: LearningLang) => x.lang,
       ),
     };
     const them = {
-      id: profile.id,
-      name: profile.displayName,
+      id:         profile.id,
+      name:       profile.displayName,
       nativeLang: profile.nativeLang as any,
-      learning: (profile.learning ?? []).map((l) => ({
-        lang: l.lang as any,
+      learning:   (profile.languageLearning?.learn ?? []).map((l) => ({
+        lang:  l.lang as any,
         level: l.level,
       })),
       interests: profile.interests,
@@ -308,69 +293,89 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
     return calculateCompatibility(me, them);
   }, [myProfile, profile]);
 
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
+
   useEffect(() => {
     let mounted = true;
+
     const load = async () => {
       setLoading(true);
-      const [remote, myProf, session] = await Promise.all([
+
+      const [remote, myProf, { data: sessionData }] = await Promise.all([
         getProfileById(friendId),
         getProfile(),
         supabase.auth.getSession(),
       ]);
+
       if (!mounted) return;
+
       if (remote) setProfile(remote);
       setMyProfile(myProf);
 
-      // Check if already liked
-      const myId = session.data.session?.user.id;
+      const myId = sessionData?.session?.user.id ?? null;
+      setMyUserId(myId);
+
       if (myId) {
         const { data: likeRow } = await supabase
           .from('likes')
           .select('id')
-          .eq('liker_id', myId)
-          .eq('liked_id', friendId)
+          .eq('from_user_id', myId)
+          .eq('to_user_id', friendId)
           .maybeSingle();
+
         if (mounted && likeRow) setLiked(true);
       }
+
       setLoading(false);
     };
+
     load();
     return () => { mounted = false; };
   }, [friendId]);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
-  }, [navigation]);
-
   const toggleLike = useCallback(async () => {
-    if (likeSending) return;
+    if (likeSending || !myUserId) return;
+
     setLikeSending(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    const { data: session } = await supabase.auth.getSession();
-    const myId = session.session?.user.id;
-    if (!myId) { setLikeSending(false); return; }
+    const newLiked = !liked;
+    setLiked(newLiked); // optimistic
 
-    if (liked) {
-      await supabase
-        .from('likes')
-        .delete()
-        .eq('liker_id', myId)
-        .eq('liked_id', friendId);
-      setLiked(false);
-    } else {
-      await supabase.from('likes').upsert({
-        liker_id: myId,
-        liked_id: friendId,
-        created_at: new Date().toISOString(),
-      });
-      setLiked(true);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    try {
+      if (liked) {
+        await supabase
+          .from('likes')
+          .delete()
+          .eq('from_user_id', myUserId)
+          .eq('to_user_id', friendId);
+      } else {
+        await supabase
+          .from('likes')
+          .upsert(
+            {
+              from_user_id: myUserId,
+              to_user_id:   friendId,
+              created_at:   new Date().toISOString(),
+            },
+            { onConflict: 'from_user_id,to_user_id' },
+          );
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch {
+      setLiked(liked); // revertir
+    } finally {
+      setLikeSending(false);
     }
-    setLikeSending(false);
-  }, [liked, likeSending, friendId]);
+  }, [liked, likeSending, friendId, myUserId]);
+
+  const goToChat = useCallback(() => {
+    if (!myUserId) return;
+    const conversationId = buildConversationId(myUserId, friendId);
+    router.push(`/chat/${conversationId}` as any);
+  }, [myUserId, friendId, router]);
 
   if (loading) {
     return (
@@ -384,10 +389,13 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
         <Ionicons name="person-outline" size={52} color={colors.fg} style={{ opacity: 0.2 }} />
-        <Text style={{ color: colors.subtext, fontWeight: '600', fontSize: 15 }}>Perfil no encontrado</Text>
+        <Text style={{ color: colors.subtext, fontWeight: '600', fontSize: 15 }}>
+          Perfil no encontrado
+        </Text>
         <TouchableOpacity
           onPress={() => router.back()}
           style={{ backgroundColor: colors.accent, borderRadius: 99, paddingHorizontal: 22, paddingVertical: 10 }}
+          accessibilityRole="button"
         >
           <Text style={{ color: '#fff', fontWeight: '800' }}>Volver</Text>
         </TouchableOpacity>
@@ -396,27 +404,27 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
   }
 
   const initials = profile.displayName.slice(0, 2).toUpperCase();
-  const hasPhoto = !!profile.photoUrl;
+  const hasPhoto  = !!profile.photoUri;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
 
-      {/* Sticky header (appears on scroll) */}
+      {/* Sticky header (aparece al scrollear) */}
       <Animated.View
         style={{
-          position: 'absolute',
+          position:          'absolute',
           top: 0, left: 0, right: 0,
-          zIndex: 50,
-          paddingTop: insets.top + 8,
-          paddingBottom: 12,
+          zIndex:            50,
+          paddingTop:        insets.top + 8,
+          paddingBottom:     12,
           paddingHorizontal: 16,
-          backgroundColor: colors.bg,
+          backgroundColor:   colors.bg,
           borderBottomWidth: 1,
           borderBottomColor: colors.border,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 10,
-          opacity: headerOpacity,
+          flexDirection:     'row',
+          alignItems:        'center',
+          gap:               10,
+          opacity:           headerOpacity,
         }}
       >
         <TouchableOpacity
@@ -435,7 +443,7 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
           }}
         >
           {hasPhoto ? (
-            <Image source={{ uri: profile.photoUrl! }} style={{ width: 32, height: 32 }} />
+            <Image source={{ uri: profile.photoUri! }} style={{ width: 32, height: 32 }} />
           ) : (
             <Text style={{ color: '#fff', fontWeight: '900', fontSize: 12 }}>{initials}</Text>
           )}
@@ -451,20 +459,20 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
         />
       </Animated.View>
 
-      {/* Scrollable content */}
+      {/* Scroll principal */}
       <Animated.ScrollView
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
+          { useNativeDriver: true },
         )}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
       >
-        {/* HERO section */}
+        {/* HERO */}
         <View style={{ alignItems: 'center', paddingBottom: 28 }}>
 
-          {/* Background tint */}
+          {/* Fondo degradado */}
           <View
             style={{
               position: 'absolute', top: 0, left: 0, right: 0,
@@ -472,7 +480,7 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
             }}
           />
 
-          {/* Back button overlay */}
+          {/* Botón volver */}
           <View style={{ position: 'absolute', top: insets.top + 8, left: 16, zIndex: 10 }}>
             <TouchableOpacity
               onPress={() => router.back()}
@@ -489,7 +497,7 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
             </TouchableOpacity>
           </View>
 
-          {/* Action buttons top-right */}
+          {/* Botones top-right */}
           <View
             style={{
               position: 'absolute', top: insets.top + 8, right: 16,
@@ -522,18 +530,12 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
           </View>
 
           {/* Avatar */}
-          <Animated.View
-            style={{
-              marginTop: insets.top + 80,
-              transform: [{ scale: avatarScale }],
-            }}
-          >
+          <Animated.View style={{ marginTop: insets.top + 80, transform: [{ scale: avatarScale }] }}>
             <View
               style={{
                 width: 108, height: 108, borderRadius: 54,
                 borderWidth: 3, borderColor: colors.accent,
-                overflow: 'hidden',
-                backgroundColor: colors.accent,
+                overflow: 'hidden', backgroundColor: colors.accent,
                 alignItems: 'center', justifyContent: 'center',
                 shadowColor: colors.accent,
                 shadowOffset: { width: 0, height: 8 },
@@ -541,25 +543,14 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
               }}
             >
               {hasPhoto ? (
-                <Image
-                  source={{ uri: profile.photoUrl! }}
-                  style={{ width: 108, height: 108 }}
-                  resizeMode="cover"
-                />
+                <Image source={{ uri: profile.photoUri! }} style={{ width: 108, height: 108 }} resizeMode="cover" />
               ) : (
-                <Text style={{ color: '#fff', fontSize: 40, fontWeight: '900' }}>
-                  {initials}
-                </Text>
+                <Text style={{ color: '#fff', fontSize: 40, fontWeight: '900' }}>{initials}</Text>
               )}
             </View>
           </Animated.View>
 
-          <Text
-            style={{
-              color: colors.fg, fontSize: 26, fontWeight: '900',
-              marginTop: 14, textAlign: 'center',
-            }}
-          >
+          <Text style={{ color: colors.fg, fontSize: 26, fontWeight: '900', marginTop: 14, textAlign: 'center' }}>
             {profile.displayName}
           </Text>
 
@@ -590,17 +581,16 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
             </Text>
           ) : null}
 
-          {/* Stats row */}
-          <View
-            style={{
-              flexDirection: 'row', gap: 10, marginTop: 20,
-              paddingHorizontal: 24, width: '100%',
-            }}
-          >
-            <StatBadge label="Nativo" value={FLAGS[profile.nativeLang] ?? '🌐'} colors={colors} />
+          {/* Stats */}
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 20, paddingHorizontal: 24, width: '100%' }}>
+            <StatBadge
+              label="Nativo"
+              value={FLAGS[profile.nativeLang ?? ''] ?? '🌐'}
+              colors={colors}
+            />
             <StatBadge
               label="Aprendiendo"
-              value={String(profile.learning?.length ?? 0)}
+              value={String(profile.languageLearning?.learn?.length ?? 0)}
               colors={colors}
             />
             <StatBadge
@@ -615,7 +605,7 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
         {/* CTA chat */}
         <View style={{ paddingHorizontal: 20, marginBottom: 28 }}>
           <TouchableOpacity
-            onPress={() => router.push(`/(tabs)/chat/${profile.id}` as any)}
+            onPress={goToChat}
             style={{
               backgroundColor: colors.accent, paddingVertical: 15,
               borderRadius: 16, flexDirection: 'row',
@@ -635,15 +625,12 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
 
         <View style={{ paddingHorizontal: 20, gap: 24 }}>
 
-          {/* Languages */}
+          {/* Idiomas */}
           <Section label="IDIOMAS" colors={colors}>
-            <LangRow
-              lang={profile.nativeLang}
-              level="Nativo"
-              label="Idioma nativo"
-              colors={colors}
-            />
-            {(profile.learning ?? []).map((l, i) => (
+            {profile.nativeLang ? (
+              <LangRow lang={profile.nativeLang} level="Nativo" label="Idioma nativo" colors={colors} />
+            ) : null}
+            {(profile.languageLearning?.learn ?? []).map((l, i) => (
               <LangRow
                 key={`${l.lang}_${i}`}
                 lang={l.lang}
@@ -654,7 +641,7 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
             ))}
           </Section>
 
-          {/* Interests */}
+          {/* Intereses */}
           {(profile.interests ?? []).length > 0 ? (
             <Section label="INTERESES" colors={colors}>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -667,22 +654,19 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
                       paddingHorizontal: 14, paddingVertical: 7,
                     }}
                   >
-                    <Text style={{ color: colors.fg, fontWeight: '600', fontSize: 13 }}>
-                      {x}
-                    </Text>
+                    <Text style={{ color: colors.fg, fontWeight: '600', fontSize: 13 }}>{x}</Text>
                   </View>
                 ))}
               </View>
             </Section>
           ) : null}
 
-          {/* Report section */}
+          {/* Reporte */}
           <View
             style={{
               borderTopWidth: 1, borderTopColor: colors.border,
-              paddingTop: 20,
-              flexDirection: 'row', alignItems: 'center',
-              justifyContent: 'space-between',
+              paddingTop: 20, flexDirection: 'row',
+              alignItems: 'center', justifyContent: 'space-between',
             }}
           >
             <Text style={{ color: colors.subtext, fontSize: 13, fontWeight: '500' }}>
@@ -715,7 +699,7 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
           style={{
             width: 50, height: 50, borderRadius: 14,
             borderWidth: 1,
-            borderColor: liked ? '#FF375F' : colors.border,
+            borderColor:     liked ? '#FF375F' : colors.border,
             backgroundColor: liked ? '#FF375F15' : colors.card,
             alignItems: 'center', justifyContent: 'center',
           }}
@@ -734,7 +718,7 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() => router.push(`/(tabs)/chat/${profile.id}` as any)}
+          onPress={goToChat}
           style={{
             flex: 1, height: 50, borderRadius: 14,
             backgroundColor: colors.accent,
@@ -745,9 +729,7 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
           accessibilityLabel="Enviar mensaje"
         >
           <Ionicons name="chatbubble-ellipses" size={18} color="#fff" />
-          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 15 }}>
-            Enviar mensaje
-          </Text>
+          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 15 }}>Enviar mensaje</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -755,38 +737,40 @@ function PublicProfileScreen({ friendId }: { friendId: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MY PROFILE (own editable view)
+// MI PERFIL (editable)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function MyProfileScreen() {
-  const router = useRouter();
-  const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const router     = useRouter();
+  const { colors } = useAppTheme();
+  const insets     = useSafeAreaInsets();
+  const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [pName, setPName] = useState('');
-  const [pUser, setPUser] = useState('');
-  const [pCountry, setPCountry] = useState('');
-  const [pNative, setPNative] = useState('');
-  const [pBio, setPBio] = useState('');
-  const [learning, setLearning] = useState<LearningLang[]>([]);
-  const [interests, setInterests] = useState<string[]>([]);
-  const [stories, setStories] = useState<StoryItem[]>([]);
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [pName,         setPName]         = useState('');
+  const [pUser,         setPUser]         = useState('');
+  const [pCountry,      setPCountry]      = useState('');
+  const [pNative,       setPNative]       = useState('');
+  const [pBio,          setPBio]          = useState('');
+  const [learning,      setLearning]      = useState<LearningLang[]>([]);
+  const [interests,     setInterests]     = useState<string[]>([]);
+  const [stories,       setStories]       = useState<StoryItem[]>([]);
+  const [photoUri,      setPhotoUri]      = useState<string | null>(null);
   const [storyDuration, setStoryDuration] = useState<24 | 48>(24);
 
   const load = useCallback(async () => {
-    const prof = await getProfile();
+    // refreshProfile fuerza re-fetch desde Supabase
+    const prof = await refreshProfile();
+    const now  = Date.now();
+
     setPName(prof.displayName ?? '');
     setPUser(prof.username ?? '');
     setPCountry(prof.country ?? '');
     setPNative(prof.nativeLang ?? '');
-    setPBio((prof as any).bio ?? '');
+    setPBio(prof.bio ?? '');
     setLearning(prof.languageLearning?.learn ?? []);
     setInterests(prof.interests ?? []);
-    const now = Date.now();
     setStories((prof.stories ?? []).filter((s) => !s.expiresAt || s.expiresAt > now));
-    setPhotoUri((prof as any).photoUri ?? null);
+    setPhotoUri(prof.photoUri ?? null);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -823,7 +807,7 @@ function MyProfileScreen() {
       if (result.canceled) return;
       const uri = result.assets?.[0]?.uri;
       if (!uri) return;
-      setPhotoUri(uri);
+      setPhotoUri(uri); // optimistic
       await updateProfile({ photoUri: uri } as any);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'No se pudo actualizar la foto.';
@@ -831,7 +815,7 @@ function MyProfileScreen() {
     }
   }, []);
 
-  const addStory = useCallback(async () => {
+  const handleAddStory = useCallback(async () => {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (perm.status !== 'granted') {
@@ -854,7 +838,7 @@ function MyProfileScreen() {
     }
   }, [storyDuration, load]);
 
-  const deleteStory = useCallback((id: string) => {
+  const confirmDeleteStory = useCallback((id: string) => {
     Alert.alert('Eliminar historia', '¿Seguro que querés eliminarla?', [
       { text: 'Cancelar', style: 'cancel' },
       {
@@ -865,7 +849,7 @@ function MyProfileScreen() {
   }, [load]);
 
   const hasBasics = pName.trim().length > 0;
-  const initials = pName.trim().slice(0, 2).toUpperCase() || '?';
+  const initials  = pName.trim().slice(0, 2).toUpperCase() || '?';
 
   return (
     <ScrollView
@@ -876,13 +860,14 @@ function MyProfileScreen() {
       {/* HERO */}
       <View
         style={{
-          paddingTop: insets.top + 20,
-          paddingBottom: 32, paddingHorizontal: 24,
-          alignItems: 'center',
-          borderBottomWidth: 1, borderBottomColor: colors.border,
+          paddingTop:        insets.top + 20,
+          paddingBottom:     32,
+          paddingHorizontal: 24,
+          alignItems:        'center',
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
         }}
       >
-        {/* Avatar with camera overlay */}
         <Pressable onPress={pickProfilePhoto} style={{ marginBottom: 4 }}>
           <View
             style={{
@@ -904,8 +889,7 @@ function MyProfileScreen() {
             style={{
               position: 'absolute', bottom: 2, right: 2,
               width: 30, height: 30, borderRadius: 15,
-              backgroundColor: colors.accent,
-              borderWidth: 2, borderColor: colors.bg,
+              backgroundColor: colors.accent, borderWidth: 2, borderColor: colors.bg,
               alignItems: 'center', justifyContent: 'center',
             }}
           >
@@ -917,9 +901,7 @@ function MyProfileScreen() {
           {pName || 'Tu perfil'}
         </Text>
         {pUser ? (
-          <Text style={{ color: colors.accent, fontWeight: '700', marginTop: 3, fontSize: 14 }}>
-            @{pUser}
-          </Text>
+          <Text style={{ color: colors.accent, fontWeight: '700', marginTop: 3, fontSize: 14 }}>@{pUser}</Text>
         ) : null}
         {pCountry ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 }}>
@@ -928,13 +910,7 @@ function MyProfileScreen() {
           </View>
         ) : null}
         {pBio ? (
-          <Text
-            style={{
-              color: colors.fg, opacity: 0.6, fontWeight: '500',
-              marginTop: 10, textAlign: 'center', lineHeight: 20,
-              fontSize: 14, paddingHorizontal: 16,
-            }}
-          >
+          <Text style={{ color: colors.fg, opacity: 0.6, fontWeight: '500', marginTop: 10, textAlign: 'center', lineHeight: 20, fontSize: 14, paddingHorizontal: 16 }}>
             {pBio}
           </Text>
         ) : null}
@@ -958,7 +934,7 @@ function MyProfileScreen() {
 
       <View style={{ padding: 20, gap: 26 }}>
 
-        {/* STORIES */}
+        {/* HISTORIAS */}
         <View style={{ gap: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={{ color: colors.subtext, fontWeight: '800', fontSize: 11, letterSpacing: 1.2 }}>
@@ -970,30 +946,21 @@ function MyProfileScreen() {
                   key={h}
                   onPress={() => setStoryDuration(h)}
                   style={{
-                    paddingHorizontal: 10, paddingVertical: 4,
-                    borderRadius: 99, borderWidth: 1,
-                    borderColor: storyDuration === h ? colors.accent : colors.border,
+                    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, borderWidth: 1,
+                    borderColor:     storyDuration === h ? colors.accent : colors.border,
                     backgroundColor: storyDuration === h ? colors.accentSoft : 'transparent',
                   }}
                   accessibilityRole="button"
                   accessibilityLabel={`Duración ${h} horas`}
                 >
-                  <Text
-                    style={{
-                      color: storyDuration === h ? colors.accent : colors.subtext,
-                      fontWeight: '700', fontSize: 11,
-                    }}
-                  >
+                  <Text style={{ color: storyDuration === h ? colors.accent : colors.subtext, fontWeight: '700', fontSize: 11 }}>
                     {h}h
                   </Text>
                 </Pressable>
               ))}
               <TouchableOpacity
-                onPress={addStory}
-                style={{
-                  backgroundColor: colors.accent, borderRadius: 99,
-                  paddingHorizontal: 12, paddingVertical: 5, marginLeft: 2,
-                }}
+                onPress={handleAddStory}
+                style={{ backgroundColor: colors.accent, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 5, marginLeft: 2 }}
                 accessibilityRole="button"
                 accessibilityLabel="Agregar historia"
               >
@@ -1004,14 +971,13 @@ function MyProfileScreen() {
 
           {stories.length === 0 ? (
             <Pressable
-              onPress={addStory}
+              onPress={handleAddStory}
               style={{
                 backgroundColor: colors.card, borderWidth: 1,
                 borderColor: colors.border, borderStyle: 'dashed',
                 borderRadius: 16, padding: 24, alignItems: 'center', gap: 8,
               }}
               accessibilityRole="button"
-              accessibilityLabel="Agregar primera historia"
             >
               <Ionicons name="images-outline" size={28} color={colors.fg} style={{ opacity: 0.25 }} />
               <Text style={{ color: colors.subtext, fontWeight: '600', fontSize: 13 }}>
@@ -1019,34 +985,18 @@ function MyProfileScreen() {
               </Text>
             </Pressable>
           ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 10 }}
-            >
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
               {stories.map((s) => {
                 const left = timeLeft(s.expiresAt);
                 return (
-                  <Pressable key={s.id} onLongPress={() => deleteStory(s.id)}>
+                  <Pressable key={s.id} onLongPress={() => confirmDeleteStory(s.id)}>
                     <Image
                       source={{ uri: s.uri }}
-                      style={{
-                        width: 90, height: 140, borderRadius: 14,
-                        borderWidth: 2, borderColor: colors.accent,
-                      }}
+                      style={{ width: 90, height: 140, borderRadius: 14, borderWidth: 2, borderColor: colors.accent }}
                     />
                     {left ? (
-                      <View
-                        style={{
-                          position: 'absolute', bottom: 8, left: 0, right: 0, alignItems: 'center',
-                        }}
-                      >
-                        <View
-                          style={{
-                            backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 99,
-                            paddingHorizontal: 7, paddingVertical: 3,
-                          }}
-                        >
+                      <View style={{ position: 'absolute', bottom: 8, left: 0, right: 0, alignItems: 'center' }}>
+                        <View style={{ backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 99, paddingHorizontal: 7, paddingVertical: 3 }}>
                           <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>{left}</Text>
                         </View>
                       </View>
@@ -1055,14 +1005,13 @@ function MyProfileScreen() {
                 );
               })}
               <Pressable
-                onPress={addStory}
+                onPress={handleAddStory}
                 style={{
                   width: 90, height: 140, borderRadius: 14,
                   borderWidth: 1.5, borderColor: colors.border, borderStyle: 'dashed',
                   backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', gap: 4,
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="Agregar historia"
               >
                 <Ionicons name="add" size={24} color={colors.fg} style={{ opacity: 0.3 }} />
                 <Text style={{ color: colors.subtext, fontSize: 10, fontWeight: '700' }}>Agregar</Text>
@@ -1074,14 +1023,14 @@ function MyProfileScreen() {
           </Text>
         </View>
 
-        {/* Native lang */}
+        {/* IDIOMA NATIVO */}
         {pNative ? (
           <Section label="IDIOMA NATIVO" colors={colors}>
             <LangRow lang={pNative} level={null} label="Tu idioma nativo" colors={colors} />
           </Section>
         ) : null}
 
-        {/* Learning */}
+        {/* APRENDIENDO */}
         <Section label="APRENDIENDO" colors={colors}>
           {learning.length === 0 ? (
             <Pressable
@@ -1101,19 +1050,13 @@ function MyProfileScreen() {
           ) : (
             <View style={{ gap: 8 }}>
               {learning.map((l, idx) => (
-                <LangRow
-                  key={`${l.lang}-${idx}`}
-                  lang={l.lang}
-                  level={l.level}
-                  label="Aprendiendo"
-                  colors={colors}
-                />
+                <LangRow key={`${l.lang}-${idx}`} lang={l.lang} level={l.level} label="Aprendiendo" colors={colors} />
               ))}
             </View>
           )}
         </Section>
 
-        {/* Interests */}
+        {/* INTERESES */}
         <Section label="INTERESES" colors={colors}>
           {interests.length === 0 ? (
             <Pressable
@@ -1154,13 +1097,13 @@ function MyProfileScreen() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Route entry point — dual mode
+// ENTRY POINT — Dual mode routing
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function ProfileRoute() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
-  const [myUserId, setMyUserId] = useState<string | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const { id }           = useLocalSearchParams<{ id?: string }>();
+  const [myUserId,       setMyUserId]       = useState<string | null>(null);
+  const [authLoading,    setAuthLoading]    = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -1177,7 +1120,7 @@ export default function ProfileRoute() {
     );
   }
 
-  // If there's an id param AND it's not my own id → public view
+  // Si hay id y no es el propio → vista pública
   if (id && id !== myUserId) {
     return <PublicProfileScreen friendId={id} />;
   }
