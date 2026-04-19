@@ -64,3 +64,8 @@ ios/
 
 expo-env.d.ts
 # @end expo-cli
+.env.local
+translator-api/.venv/ 
+translator-api/__pycache__/ 
+**/__pycache__/ 
+*.pyc 
