@@ -3,15 +3,10 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ONBOARDING / EDICIÓN DE PERFIL
 //
-// FIXES vs versión anterior:
-//   - useThemeMode → useAppTheme (single source of truth)
-//   - getProfile / updateProfile desde profilesStorage (sync con Supabase)
-//   - Al guardar: syncProfileNow() garantiza que el dato llega a Supabase
-//     ANTES de navegar a home (crítico para que el usuario aparezca en discovery)
-//   - Indicador de sync status en el botón guardar
-//   - Carga inicial desde refreshProfile() (siempre datos frescos de Supabase)
-//   - Username: validación de caracteres permitidos
-//   - Sin console.log en producción
+// CAMBIOS vs versión anterior:
+//   - Wrapped con withErrorBoundary — cualquier crash de render muestra
+//     pantalla de retry en lugar de cerrar la app
+//   - Sin cambios en lógica de negocio ni UI
 // ══════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -39,25 +34,26 @@ import {
   updateProfile,
   syncProfileNow,
 } from '../src/storage/profilesStorage';
+import { withErrorBoundary } from '../src/components/ErrorBoundary';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LANGUAGES: { code: LanguageCode; name: string; flag: string }[] = [
-  { code: 'es', name: 'Español',  flag: '🇦🇷' },
-  { code: 'en', name: 'English',  flag: '🇺🇸' },
-  { code: 'de', name: 'Deutsch',  flag: '🇩🇪' },
-  { code: 'ja', name: '日本語',   flag: '🇯🇵' },
-  { code: 'ru', name: 'Русский',  flag: '🇷🇺' },
-  { code: 'zh', name: '中文',     flag: '🇨🇳' },
+  { code: 'es', name: 'Español', flag: '🇦🇷' },
+  { code: 'en', name: 'English', flag: '🇺🇸' },
+  { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
+  { code: 'ja', name: '日本語',  flag: '🇯🇵' },
+  { code: 'ru', name: 'Русский', flag: '🇷🇺' },
+  { code: 'zh', name: '中文',    flag: '🇨🇳' },
 ];
 
 const INTERESTS_OPTIONS = [
-  'Música',      'Tecnología', 'Viajes',      'Deportes',   'Películas',
-  'Libros',      'Gastronomía','Arte',        'Gaming',     'Fotografía',
-  'Fitness',     'Naturaleza', 'Moda',        'Ciencia',    'Idiomas',
-  'Diseño',      'Política',   'Historia',    'Psicología', 'Economía',
+  'Música',     'Tecnología', 'Viajes',     'Deportes',   'Películas',
+  'Libros',     'Gastronomía','Arte',       'Gaming',     'Fotografía',
+  'Fitness',    'Naturaleza', 'Moda',       'Ciencia',    'Idiomas',
+  'Diseño',     'Política',   'Historia',   'Psicología', 'Economía',
 ];
 
 const USERNAME_REGEX = /^[a-z0-9._]{0,32}$/;
@@ -71,8 +67,8 @@ function Label({
   colors,
   optional = false,
 }: {
-  text:     string;
-  colors:   ReturnType<typeof useAppTheme>['colors'];
+  text:      string;
+  colors:    ReturnType<typeof useAppTheme>['colors'];
   optional?: boolean;
 }) {
   return (
@@ -86,7 +82,6 @@ function Label({
 }
 
 function LangChip({
-  code,
   name,
   flag,
   selected,
@@ -106,8 +101,8 @@ function LangChip({
       style={[
         styles.chip,
         {
-          backgroundColor: selected ? colors.accent     : colors.card,
-          borderColor:     selected ? colors.accent     : colors.border,
+          backgroundColor: selected ? colors.accent  : colors.card,
+          borderColor:     selected ? colors.accent  : colors.border,
         },
       ]}
       accessibilityRole="button"
@@ -123,7 +118,6 @@ function LangChip({
 }
 
 function LearningChip({
-  code,
   name,
   flag,
   selected,
@@ -195,11 +189,11 @@ function InterestChip({
 // PANTALLA PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function OnboardingScreen() {
+function OnboardingScreen() {
   const router     = useRouter();
   const { colors } = useAppTheme();
 
-  // ── Formulario ──────────────────────────────────────────────────────────────
+  // ── Formulario ─────────────────────────────────────────────────────────────
   const [displayName,   setDisplayName]   = useState('');
   const [username,      setUsername]      = useState('');
   const [country,       setCountry]       = useState('');
@@ -209,32 +203,30 @@ export default function OnboardingScreen() {
   const [learningLangs, setLearningLangs] = useState<LanguageCode[]>([]);
   const [interests,     setInterests]     = useState<string[]>([]);
 
-  // ── UI ──────────────────────────────────────────────────────────────────────
-  const [saving,        setSaving]        = useState(false);
-  const [loadingInit,   setLoadingInit]   = useState(true);
-  /** 'idle' | 'syncing' | 'done' | 'error' */
-  const [savePhase,     setSavePhase]     = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
+  // ── UI ─────────────────────────────────────────────────────────────────────
+  const [saving,      setSaving]      = useState(false);
+  const [loadingInit, setLoadingInit] = useState(true);
+  const [savePhase,   setSavePhase]   = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
 
-  // ── Carga inicial ────────────────────────────────────────────────────────────
-  // refreshProfile() → Supabase primero, luego cache
+  // ── Carga inicial ──────────────────────────────────────────────────────────
   useEffect(() => {
     let mounted = true;
     refreshProfile().then((prof) => {
       if (!mounted) return;
-      if (prof.displayName)              setDisplayName(prof.displayName);
-      if (prof.username)                 setUsername(prof.username);
-      if (prof.country)                  setCountry(prof.country);
-      if (prof.city)                     setCity(prof.city);
-      if (prof.bio)                      setBio(prof.bio);
-      if (prof.nativeLang)               setNativeLang(prof.nativeLang);
-      if (prof.languageLearning?.learn)  setLearningLangs(prof.languageLearning.learn.map((l) => l.lang));
-      if (prof.interests)                setInterests(prof.interests);
+      if (prof.displayName)             setDisplayName(prof.displayName);
+      if (prof.username)                setUsername(prof.username);
+      if (prof.country)                 setCountry(prof.country);
+      if (prof.city)                    setCity(prof.city);
+      if (prof.bio)                     setBio(prof.bio);
+      if (prof.nativeLang)              setNativeLang(prof.nativeLang);
+      if (prof.languageLearning?.learn) setLearningLangs(prof.languageLearning.learn.map((l) => l.lang));
+      if (prof.interests)               setInterests(prof.interests);
       setLoadingInit(false);
     });
     return () => { mounted = false; };
   }, []);
 
-  // ── Toggles ──────────────────────────────────────────────────────────────────
+  // ── Toggles ────────────────────────────────────────────────────────────────
 
   const toggleLearning = useCallback((code: LanguageCode) => {
     setLearningLangs((prev) =>
@@ -253,10 +245,9 @@ export default function OnboardingScreen() {
     if (USERNAME_REGEX.test(lower)) setUsername(lower);
   }, []);
 
-  // ── Guardar ──────────────────────────────────────────────────────────────────
+  // ── Guardar ────────────────────────────────────────────────────────────────
 
   const handleSave = async () => {
-    // Validación
     if (!displayName.trim()) {
       Alert.alert('Falta info', 'Ingresá tu nombre para continuar.');
       return;
@@ -278,7 +269,7 @@ export default function OnboardingScreen() {
         .filter((c) => c !== nativeLang)
         .map((lang) => ({ lang, level: null }));
 
-      // 1. Escritura optimista en AsyncStorage (inmediata)
+      // 1. Escritura optimista en AsyncStorage
       await updateProfile({
         displayName:      displayName.trim(),
         username:         username.trim()  || undefined,
@@ -290,15 +281,11 @@ export default function OnboardingScreen() {
         languageLearning: { learn, goal: 'Amistad' },
       });
 
-      // 2. Sync garantizado a Supabase (await completo)
-      //    Esto es el punto crítico del onboarding — sin esto el usuario
-      //    no aparece en getDiscoveryProfiles() de otros usuarios.
+      // 2. Sync garantizado a Supabase
       setSavePhase('syncing');
-      const { syncStatus, error } = await syncProfileNow();
+      const { syncStatus, error: syncError } = await syncProfileNow();
 
       if (syncStatus === 'error') {
-        // El dato está en AsyncStorage pero no llegó a Supabase.
-        // Avisamos pero no bloqueamos — la app funciona offline.
         setSavePhase('error');
         Alert.alert(
           'Sin conexión',
@@ -325,7 +312,7 @@ export default function OnboardingScreen() {
     router.replace('/(tabs)/home' as any);
   };
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   const inputStyle = [
     styles.input,
@@ -345,8 +332,8 @@ export default function OnboardingScreen() {
   }
 
   const saveButtonLabel = () => {
-    if (!saving)                  return 'Guardar perfil ✓';
-    if (savePhase === 'syncing')  return 'Sincronizando…';
+    if (!saving)                 return 'Guardar perfil ✓';
+    if (savePhase === 'syncing') return 'Sincronizando…';
     return 'Guardando…';
   };
 
@@ -355,20 +342,19 @@ export default function OnboardingScreen() {
       style={{ flex: 1, backgroundColor: colors.bg }}
       contentContainerStyle={{
         paddingBottom: 80,
-        paddingTop: Platform.OS === 'ios' ? 60 : 28,
+        paddingTop:    Platform.OS === 'ios' ? 60 : 28,
       }}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
       <View style={{ paddingHorizontal: 24 }}>
 
-        {/* Título */}
         <Text style={[styles.title, { color: colors.fg }]}>Tu perfil 🙋</Text>
         <Text style={[styles.subtitle, { color: colors.fg }]}>
           Así te van a conocer tus nuevos amigos.
         </Text>
 
-        {/* ── NOMBRE ── */}
+        {/* NOMBRE */}
         <Label text="NOMBRE" colors={colors} />
         <TextInput
           style={inputStyle}
@@ -380,7 +366,7 @@ export default function OnboardingScreen() {
           returnKeyType="next"
         />
 
-        {/* ── USUARIO ── */}
+        {/* USUARIO */}
         <Label text="USUARIO" colors={colors} optional />
         <TextInput
           style={inputStyle}
@@ -394,7 +380,7 @@ export default function OnboardingScreen() {
           returnKeyType="next"
         />
 
-        {/* ── PAÍS ── */}
+        {/* PAÍS */}
         <Label text="PAÍS" colors={colors} optional />
         <TextInput
           style={inputStyle}
@@ -406,7 +392,7 @@ export default function OnboardingScreen() {
           returnKeyType="next"
         />
 
-        {/* ── CIUDAD ── */}
+        {/* CIUDAD */}
         <Label text="CIUDAD" colors={colors} optional />
         <TextInput
           style={inputStyle}
@@ -418,7 +404,7 @@ export default function OnboardingScreen() {
           returnKeyType="next"
         />
 
-        {/* ── BIO ── */}
+        {/* BIO */}
         <Label text="BIO" colors={colors} optional />
         <TextInput
           style={[inputStyle, styles.bioInput]}
@@ -434,7 +420,7 @@ export default function OnboardingScreen() {
           {bio.length}/200
         </Text>
 
-        {/* ── IDIOMA NATIVO ── */}
+        {/* IDIOMA NATIVO */}
         <Label text="IDIOMA NATIVO" colors={colors} />
         <View style={styles.chipRow}>
           {LANGUAGES.map((l) => (
@@ -446,7 +432,6 @@ export default function OnboardingScreen() {
               selected={nativeLang === l.code}
               onPress={() => {
                 setNativeLang(l.code);
-                // Si el nativo estaba en learningLangs, sacarlo
                 setLearningLangs((prev) => prev.filter((c) => c !== l.code));
               }}
               colors={colors}
@@ -454,7 +439,7 @@ export default function OnboardingScreen() {
           ))}
         </View>
 
-        {/* ── QUIERO APRENDER ── */}
+        {/* QUIERO APRENDER */}
         <Label text="QUIERO APRENDER" colors={colors} />
         <View style={styles.chipRow}>
           {LANGUAGES
@@ -477,7 +462,7 @@ export default function OnboardingScreen() {
           </Text>
         ) : null}
 
-        {/* ── INTERESES ── */}
+        {/* INTERESES */}
         <Label text="INTERESES" colors={colors} optional />
         <View style={styles.chipRow}>
           {INTERESTS_OPTIONS.map((interest) => (
@@ -494,7 +479,7 @@ export default function OnboardingScreen() {
           Elegí los que más te representan. Mejora tus matches.
         </Text>
 
-        {/* ── BOTÓN GUARDAR ── */}
+        {/* BOTÓN GUARDAR */}
         <TouchableOpacity
           style={[
             styles.saveButton,
@@ -530,11 +515,10 @@ const styles = StyleSheet.create({
     alignItems:     'center',
     justifyContent: 'center',
   },
-
   title: {
-    fontSize:     30,
-    fontWeight:   '900',
-    marginBottom: 6,
+    fontSize:      30,
+    fontWeight:    '900',
+    marginBottom:  6,
     letterSpacing: -0.5,
   },
   subtitle: {
@@ -544,7 +528,6 @@ const styles = StyleSheet.create({
     fontSize:     15,
     lineHeight:   22,
   },
-
   labelRow: {
     flexDirection:  'row',
     alignItems:     'center',
@@ -563,7 +546,6 @@ const styles = StyleSheet.create({
     fontSize:      9,
     letterSpacing: 0.8,
   },
-
   input: {
     borderWidth:       1.5,
     borderRadius:      12,
@@ -573,8 +555,8 @@ const styles = StyleSheet.create({
     height:            52,
   },
   bioInput: {
-    height:      90,
-    paddingTop:  12,
+    height:       90,
+    paddingTop:   12,
     marginBottom: 4,
   },
   charCount: {
@@ -584,7 +566,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     fontWeight:   '600',
   },
-
   chipRow: {
     flexDirection: 'row',
     flexWrap:      'wrap',
@@ -602,7 +583,6 @@ const styles = StyleSheet.create({
   },
   chipFlag: { fontSize: 16 },
   chipText: { fontWeight: '700', fontSize: 13 },
-
   hintText: {
     fontSize:     12,
     opacity:      0.45,
@@ -610,7 +590,6 @@ const styles = StyleSheet.create({
     marginTop:    -16,
     marginBottom: 24,
   },
-
   saveButton: {
     height:         56,
     borderRadius:   16,
@@ -629,3 +608,9 @@ const styles = StyleSheet.create({
     gap:           10,
   },
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORT — wrapped con ErrorBoundary
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default withErrorBoundary(OnboardingScreen, { scope: 'OnboardingScreen' });

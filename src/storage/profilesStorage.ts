@@ -759,51 +759,88 @@ export function publicToRemote(p: PublicProfileData): RemoteProfile {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// API PÚBLICA — DISCOVERY
+// API PÚBLICA — DISCOVERY CON PAGINACIÓN CURSOR-BASED
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Obtiene perfiles para exploración (pantalla Matches/Discovery).
- *
- * Excluye:
- *  - El propio usuario
- *  - Usuarios a los que ya les di like (evitar duplicados en la lista)
- *
- * @param limit  Máximo de perfiles a devolver (default 60)
- */
-export async function getDiscoveryProfiles(limit = 60): Promise<RemoteProfile[]> {
-  const userId = await getCurrentUserId();
-  if (!userId) return [];
+/** Resultado paginado de discovery */
+export interface DiscoveryPage {
+  profiles:    RemoteProfile[];
+  /** Cursor para la siguiente página (último created_at de la página actual). Null si no hay más. */
+  nextCursor:  string | null;
+  hasMore:     boolean;
+  /** Total approximate — no hacer COUNT(*) en prod, solo para UI */
+  pageSize:    number;
+}
 
-  // 1. IDs a los que ya les di like
+const DISCOVERY_PAGE_SIZE = 20;
+
+/**
+ * Obtiene perfiles para exploración con cursor-based pagination.
+ *
+ * Estrategia:
+ *  - Cursor = created_at del último perfil de la página anterior
+ *  - Orden = created_at DESC (perfiles más nuevos primero)
+ *  - Excluye: propio usuario + ya likeados
+ *  - Page size = 20 (óptimo para FlatList con windowSize=5)
+ *
+ * Por qué cursor y no offset:
+ *  Con offset, si un nuevo perfil se inserta mientras el usuario scrollea,
+ *  los perfiles se desplazan y aparecen duplicados o se saltan.
+ *  Con cursor, cada página empieza exactamente donde terminó la anterior.
+ *
+ * @param cursor  created_at del último perfil visto (null para primera página)
+ * @param limit   Perfiles por página (default 20)
+ */
+export async function getDiscoveryProfiles(
+  cursor: string | null = null,
+  limit:  number = DISCOVERY_PAGE_SIZE,
+): Promise<DiscoveryPage> {
+  const userId = await getCurrentUserId();
+  if (!userId) return { profiles: [], nextCursor: null, hasMore: false, pageSize: 0 };
+
+  // 1. IDs ya likeados por el usuario (para excluirlos)
   const { data: likedRows } = await supabase
     .from('likes')
     .select('to_user_id')
     .eq('from_user_id', userId);
 
   const excludedIds: string[] = [userId];
-  if (likedRows && likedRows.length > 0) {
+  if (likedRows) {
     for (const row of likedRows) {
       if (row.to_user_id) excludedIds.push(row.to_user_id);
     }
   }
 
-  // 2. Traer perfiles excluyendo los ya likeados y el propio
-  // Supabase no soporta .not('id', 'in', [...]) directamente con arrays grandes,
-  // pero para < 500 IDs funciona con la sintaxis de PostgREST
-  const { data, error } = await supabase
+  // 2. Query paginada con cursor
+  // Pedimos limit + 1 para saber si hay más páginas sin hacer COUNT(*)
+  let query = supabase
     .from('profiles')
     .select(
-      'id, full_name, username, country, city, native_language, learning_language, level, bio, avatar_url, preferences',
+      'id, full_name, username, country, city, native_language, learning_language, level, bio, avatar_url, preferences, created_at',
     )
     .not('id', 'in', `(${excludedIds.join(',')})`)
-    .limit(limit);
+    .order('created_at', { ascending: false })
+    .limit(limit + 1);
 
-  if (error || !data) return [];
+  if (cursor) {
+    query = query.lt('created_at', cursor);
+  }
 
-  // 3. Convertir a RemoteProfile
+  const { data, error } = await query;
+
+  if (error || !data) {
+    return { profiles: [], nextCursor: null, hasMore: false, pageSize: 0 };
+  }
+
+  // 3. Determinar si hay más páginas
+  const hasMore   = data.length > limit;
+  const pageData  = hasMore ? data.slice(0, limit) : data;
+  const lastItem  = pageData[pageData.length - 1] as (SupabaseProfileRow & { created_at: string }) | undefined;
+  const nextCursor = hasMore && lastItem ? lastItem.created_at : null;
+
+  // 4. Convertir a RemoteProfile
   const results: RemoteProfile[] = [];
-  for (const row of data as SupabaseProfileRow[]) {
+  for (const row of pageData as (SupabaseProfileRow & { created_at: string })[]) {
     const profileData = rowToProfileData(row);
     const pub: PublicProfileData = {
       id:          row.id,
@@ -826,5 +863,10 @@ export async function getDiscoveryProfiles(limit = 60): Promise<RemoteProfile[]>
     results.push(publicToRemote(pub));
   }
 
-  return results;
+  return {
+    profiles:   results,
+    nextCursor,
+    hasMore,
+    pageSize:   pageData.length,
+  };
 }

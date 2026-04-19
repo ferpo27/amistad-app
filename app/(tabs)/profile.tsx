@@ -1,16 +1,14 @@
 // app/(tabs)/profile.tsx
 //
 // ══════════════════════════════════════════════════════════════════════════════
-// PERFIL PROPIO
+// PERFIL PROPIO — Meta-scale production
 //
-// CAMBIOS vs versión anterior:
-//   - Usa profilesStorage (Supabase + cache) en lugar de storage.ts directo
-//   - useThemeMode → useAppTheme (consistente con el resto de la app)
-//   - addStoryPhoto / removeStoryPhoto desde profilesStorage
-//   - updateProfile desde profilesStorage (persiste en Supabase)
-//   - Indicador de sync status (pastilla discreta en el header)
-//   - pickProfilePhoto sube el URI y sincroniza remotamente
-//   - Sin console.log en producción
+// Pipeline de imágenes:
+//   avatar → compressImage(uri, 'avatar') → ≤300 KB, max 800px → updateProfile
+//   story  → compressImage(uri, 'story')  → ≤600 KB, max 1200px → addStoryPhoto
+//
+// FIX: compressionErrorMessage usaba 'FILE_TOO_LARGE' (código de AudioUploadError).
+//      ImageCompressionError tiene 'SIZE_EXCEEDED'. Corregido.
 // ══════════════════════════════════════════════════════════════════════════════
 
 import React, {
@@ -47,33 +45,29 @@ import {
   type SyncStatus,
 } from '../../src/storage/profilesStorage';
 import type { LearningLang, StoryItem } from '../../src/storage';
+import {
+  compressImage,
+  ImageCompressionError,
+} from '../../src/utils/imageCompressor';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────────────────────────────────────
 
 const FLAGS: Record<string, string> = {
-  es: '🇦🇷',
-  en: '🇺🇸',
-  de: '🇩🇪',
-  ja: '🇯🇵',
-  ru: '🇷🇺',
-  zh: '🇨🇳',
+  es: '🇦🇷', en: '🇺🇸', de: '🇩🇪',
+  ja: '🇯🇵', ru: '🇷🇺', zh: '🇨🇳',
 };
 
 const LANG_NAMES: Record<string, string> = {
-  es: 'Español',
-  en: 'English',
-  de: 'Deutsch',
-  ja: '日本語',
-  ru: 'Русский',
-  zh: '中文',
+  es: 'Español', en: 'English',  de: 'Deutsch',
+  ja: '日本語',   ru: 'Русский', zh: '中文',
 };
 
 const HOURS_OPTIONS: (24 | 48)[] = [24, 48];
 
 const SYNC_STATUS_LABEL: Record<SyncStatus, string | null> = {
-  synced:  null,     // Silencioso cuando todo OK
+  synced:  null,
   pending: '↑',
   error:   '!',
   offline: '✈',
@@ -99,6 +93,31 @@ function timeLeft(expiresAt?: number): string | null {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+/**
+ * Traduce un código de ImageCompressionError a mensaje legible.
+ *
+ * FIX: 'FILE_TOO_LARGE' pertenece a AudioUploadError, NO a ImageCompressionError.
+ *      ImageCompressionError usa 'SIZE_EXCEEDED' para imágenes que superan el límite.
+ */
+function compressionErrorMessage(err: unknown): string {
+  if (err instanceof ImageCompressionError) {
+    switch (err.code) {
+      case 'SIZE_EXCEEDED':   return 'La imagen es demasiado grande. Intentá con otra foto.';
+      case 'READ_FAILED':     return 'No se pudo leer la imagen. Intentá de nuevo.';
+      case 'COMPRESS_FAILED': return 'No se pudo comprimir la imagen. Intentá de nuevo.';
+      default:                return 'Error procesando la imagen.';
+    }
+  }
+  return (err as Error)?.message ?? 'Error inesperado.';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIPOS DE ESTADO DE CARGA DE IMAGEN
+// ─────────────────────────────────────────────────────────────────────────────
+
+type PhotoLoadState = 'idle' | 'compressing' | 'uploading' | 'done' | 'error';
+type StoryLoadState = 'idle' | 'compressing' | 'uploading' | 'done' | 'error';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SUB-COMPONENTES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -108,23 +127,13 @@ function Section({
   children,
   colors,
 }: {
-  label: string;
+  label:    string;
   children: React.ReactNode;
-  colors: ReturnType<typeof useAppTheme>['colors'];
+  colors:   ReturnType<typeof useAppTheme>['colors'];
 }) {
   return (
     <View style={{ gap: 10 }}>
-      <Text
-        style={{
-          color:       colors.fg,
-          opacity:     0.4,
-          fontWeight:  '800',
-          fontSize:    11,
-          letterSpacing: 1.2,
-        }}
-      >
-        {label}
-      </Text>
+      <Text style={[styles.sectionLabel, { color: colors.fg }]}>{label}</Text>
       {children}
     </View>
   );
@@ -132,27 +141,32 @@ function Section({
 
 function SyncBadge({
   status,
-  colors,
 }: {
   status: SyncStatus;
-  colors: ReturnType<typeof useAppTheme>['colors'];
 }) {
   const label = SYNC_STATUS_LABEL[status];
   if (!label) return null;
-
   return (
     <View
-      style={{
-        position:        'absolute',
-        top:             Platform.OS === 'ios' ? 56 : 20,
-        right:           20,
-        backgroundColor: SYNC_STATUS_COLOR[status],
-        borderRadius:    99,
-        paddingHorizontal: 8,
-        paddingVertical:   3,
-      }}
+      style={[
+        styles.syncBadge,
+        { backgroundColor: SYNC_STATUS_COLOR[status] },
+      ]}
     >
-      <Text style={{ color: '#fff', fontWeight: '900', fontSize: 11 }}>{label}</Text>
+      <Text style={styles.syncBadgeText}>{label}</Text>
+    </View>
+  );
+}
+
+function AvatarOverlay({ state }: { state: PhotoLoadState }) {
+  if (state === 'idle' || state === 'done') return null;
+  const label =
+    state === 'compressing' ? 'Comprimiendo…' :
+    state === 'uploading'   ? 'Guardando…'    : '';
+  return (
+    <View style={styles.avatarOverlay}>
+      <ActivityIndicator color="#fff" size="small" />
+      <Text style={styles.avatarOverlayText}>{label}</Text>
     </View>
   );
 }
@@ -162,24 +176,20 @@ function StoryCard({
   onLongPress,
   colors,
 }: {
-  story: StoryItem;
+  story:       StoryItem;
   onLongPress: () => void;
-  colors: ReturnType<typeof useAppTheme>['colors'];
+  colors:      ReturnType<typeof useAppTheme>['colors'];
 }) {
   const left = timeLeft(story.expiresAt);
-
   return (
-    <Pressable onLongPress={onLongPress}>
+    <Pressable onLongPress={onLongPress} style={{ position: 'relative' }}>
       <Image
         source={{ uri: story.uri }}
         style={styles.storyImage}
         resizeMode="cover"
       />
       <View
-        style={[
-          styles.storyBorder,
-          { borderColor: colors.accent },
-        ]}
+        style={[styles.storyBorder, { borderColor: colors.accent }]}
         pointerEvents="none"
       />
       {left ? (
@@ -194,27 +204,27 @@ function StoryCard({
 }
 
 function AddStoryCard({
-  colors,
   onPress,
+  colors,
+  isLoading,
 }: {
-  colors: ReturnType<typeof useAppTheme>['colors'];
-  onPress: () => void;
+  onPress:   () => void;
+  colors:    ReturnType<typeof useAppTheme>['colors'];
+  isLoading: boolean;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      style={[
-        styles.storyAddCard,
-        {
-          borderColor:     colors.border,
-          backgroundColor: colors.card,
-        },
-      ]}
+      style={[styles.storyAddCard, { borderColor: colors.border, backgroundColor: colors.card }]}
     >
-      <Ionicons name="add" size={24} color={colors.fg} style={{ opacity: 0.3 }} />
-      <Text style={{ color: colors.fg, opacity: 0.3, fontSize: 10, fontWeight: '700' }}>
-        Agregar
-      </Text>
+      {isLoading ? (
+        <ActivityIndicator color={colors.accent} size="small" />
+      ) : (
+        <>
+          <Ionicons name="add" size={24} color={colors.fg} style={{ opacity: 0.3 }} />
+          <Text style={[styles.storyAddText, { color: colors.fg }]}>Agregar</Text>
+        </>
+      )}
     </Pressable>
   );
 }
@@ -224,11 +234,11 @@ function AddStoryCard({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen() {
-  const router   = useRouter();
+  const router     = useRouter();
   const { colors } = useAppTheme();
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Estado del perfil
+  // ── Estado del perfil ───────────────────────────────────────────────────────
   const [pName,     setPName]     = useState('');
   const [pUser,     setPUser]     = useState('');
   const [pCountry,  setPCountry]  = useState('');
@@ -239,17 +249,17 @@ export default function ProfileScreen() {
   const [stories,   setStories]   = useState<StoryItem[]>([]);
   const [photoUri,  setPhotoUri]  = useState<string | null>(null);
 
-  // UI state
+  // ── UI state ────────────────────────────────────────────────────────────────
   const [storyDuration, setStoryDuration] = useState<24 | 48>(24);
   const [syncStatus,    setSyncStatus]    = useState<SyncStatus>('synced');
-  const [loadingPhoto,  setLoadingPhoto]  = useState(false);
+  const [photoState,    setPhotoState]    = useState<PhotoLoadState>('idle');
+  const [storyState,    setStoryState]    = useState<StoryLoadState>('idle');
 
-  // ── Carga del perfil ────────────────────────────────────────────────────────
+  // ── Carga ───────────────────────────────────────────────────────────────────
 
   const loadProfile = useCallback(async () => {
     const prof = await getProfile();
     const now  = Date.now();
-
     setPName(prof.displayName ?? '');
     setPUser(prof.username ?? '');
     setPCountry(prof.country ?? '');
@@ -259,21 +269,16 @@ export default function ProfileScreen() {
     setInterests(prof.interests ?? []);
     setStories((prof.stories ?? []).filter((s) => !s.expiresAt || s.expiresAt > now));
     setPhotoUri(prof.photoUri ?? null);
-
     const status = await getSyncStatus();
     setSyncStatus(status);
   }, []);
 
-  // ── Timers ──────────────────────────────────────────────────────────────────
-
-  // Limpia stories expiradas cada minuto
+  // Timer: elimina stories expiradas cada minuto
   useEffect(() => {
     timerRef.current = setInterval(() => {
       setStories((prev) => prev.filter((s) => !s.expiresAt || s.expiresAt > Date.now()));
     }, 60_000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
   // Limpia al volver al primer plano
@@ -286,7 +291,7 @@ export default function ProfileScreen() {
     return () => sub.remove();
   }, []);
 
-  // Recarga al hacer focus (puede haber cambios desde Settings o Onboarding)
+  // Recarga al hacer focus (cambios desde Settings / Onboarding)
   useFocusEffect(
     useCallback(() => {
       refreshProfile().then((prof) => {
@@ -308,64 +313,80 @@ export default function ProfileScreen() {
   // ── Acciones ────────────────────────────────────────────────────────────────
 
   const pickProfilePhoto = async () => {
-    if (loadingPhoto) return;
+    if (photoState !== 'idle') return;
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (perm.status !== 'granted') {
         Alert.alert('Permiso necesario', 'Necesitamos acceso a tu galería para cambiar la foto.');
         return;
       }
-
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.85,
+        quality: 1, // sin compresión del picker — la hacemos nosotros
       });
-
       if (result.canceled) return;
-      const uri = result.assets?.[0]?.uri;
-      if (!uri) return;
+      const rawUri = result.assets?.[0]?.uri;
+      if (!rawUri) return;
 
-      setLoadingPhoto(true);
-      setPhotoUri(uri); // optimistic
+      // Paso 1: comprimir
+      setPhotoState('compressing');
+      setPhotoUri(rawUri); // preview optimista
 
-      const { syncStatus: status } = await updateProfile({ photoUri: uri } as any);
+      const compressed = await compressImage(rawUri, 'avatar');
+
+      // Paso 2: guardar
+      setPhotoState('uploading');
+      const { syncStatus: status } = await updateProfile({ photoUri: compressed.uri } as Parameters<typeof updateProfile>[0]);
+      setPhotoUri(compressed.uri);
       setSyncStatus(status);
+      setPhotoState('done');
 
-    } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'No se pudo actualizar la foto.');
+    } catch (err) {
+      setPhotoState('error');
+      Alert.alert('Error al actualizar foto', compressionErrorMessage(err));
     } finally {
-      setLoadingPhoto(false);
+      // Reset a idle después de 1.5s para que el usuario vea el estado
+      setTimeout(() => setPhotoState('idle'), 1_500);
     }
   };
 
   const addStory = async () => {
+    if (storyState !== 'idle') return;
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (perm.status !== 'granted') {
         Alert.alert('Permiso necesario', 'Necesitamos acceso a tu galería.');
         return;
       }
-
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [9, 16],
-        quality: 0.85,
+        quality: 1,
       });
-
       if (result.canceled) return;
-      const uri = result.assets?.[0]?.uri;
-      if (!uri) return;
+      const rawUri = result.assets?.[0]?.uri;
+      if (!rawUri) return;
 
+      // Paso 1: comprimir
+      setStoryState('compressing');
+      const compressed = await compressImage(rawUri, 'story');
+
+      // Paso 2: guardar
+      setStoryState('uploading');
       const expiresAt = Date.now() + storyDuration * 3_600_000;
-      const { syncStatus: status } = await addStoryPhoto(uri, '', expiresAt);
+      const { syncStatus: status } = await addStoryPhoto(compressed.uri, '', expiresAt);
       setSyncStatus(status);
+      setStoryState('done');
       await loadProfile();
 
-    } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'No se pudo agregar la historia.');
+    } catch (err) {
+      setStoryState('error');
+      Alert.alert('Error al agregar historia', compressionErrorMessage(err));
+    } finally {
+      setTimeout(() => setStoryState('idle'), 1_500);
     }
   };
 
@@ -386,8 +407,10 @@ export default function ProfileScreen() {
 
   // ── Derivados ───────────────────────────────────────────────────────────────
 
-  const hasBasics  = pName.trim().length > 0;
-  const initials   = pName.trim().slice(0, 2).toUpperCase() || '?';
+  const hasBasics = pName.trim().length > 0;
+  const initials  = pName.trim().slice(0, 2).toUpperCase() || '?';
+  const isPhotoLoading = photoState === 'compressing' || photoState === 'uploading';
+  const isStoryLoading = storyState === 'compressing' || storyState === 'uploading';
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -397,8 +420,7 @@ export default function ProfileScreen() {
       contentContainerStyle={{ paddingBottom: 80 }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Sync badge */}
-      <SyncBadge status={syncStatus} colors={colors} />
+      <SyncBadge status={syncStatus} />
 
       {/* ── HERO ── */}
       <View
@@ -411,7 +433,13 @@ export default function ProfileScreen() {
         ]}
       >
         {/* Avatar */}
-        <Pressable onPress={pickProfilePhoto} style={styles.avatarWrapper}>
+        <Pressable
+          onPress={pickProfilePhoto}
+          style={styles.avatarWrapper}
+          disabled={isPhotoLoading}
+          accessibilityRole="button"
+          accessibilityLabel="Cambiar foto de perfil"
+        >
           <View
             style={[
               styles.avatar,
@@ -422,16 +450,24 @@ export default function ProfileScreen() {
               },
             ]}
           >
-            {loadingPhoto ? (
-              <ActivityIndicator color="#fff" size="large" />
-            ) : photoUri ? (
+            {photoUri ? (
               <Image source={{ uri: photoUri }} style={styles.avatarImage} resizeMode="cover" />
             ) : (
               <Text style={styles.avatarInitials}>{initials}</Text>
             )}
+            <AvatarOverlay state={photoState} />
           </View>
-          <View style={[styles.cameraButton, { backgroundColor: colors.accent, borderColor: colors.bg }]}>
-            <Ionicons name="camera" size={14} color="#fff" />
+          <View
+            style={[
+              styles.cameraButton,
+              { backgroundColor: colors.accent, borderColor: colors.bg },
+            ]}
+          >
+            {isPhotoLoading ? (
+              <ActivityIndicator color="#fff" size="small" style={{ transform: [{ scale: 0.6 }] }} />
+            ) : (
+              <Ionicons name="camera" size={14} color="#fff" />
+            )}
           </View>
         </Pressable>
 
@@ -452,10 +488,12 @@ export default function ProfileScreen() {
           <Text style={[styles.heroBio, { color: colors.fg }]}>{pBio}</Text>
         ) : null}
 
-        {/* CTA Edit */}
+        {/* CTA */}
         <Pressable
           onPress={() => router.push('/onboarding' as any)}
           style={[styles.editButton, { backgroundColor: colors.accent }]}
+          accessibilityRole="button"
+          accessibilityLabel={hasBasics ? 'Editar perfil' : 'Completar perfil'}
         >
           <Ionicons name={hasBasics ? 'pencil' : 'person-add'} size={15} color="#fff" />
           <Text style={styles.editButtonText}>
@@ -483,33 +521,56 @@ export default function ProfileScreen() {
                       backgroundColor: storyDuration === h ? colors.accentSoft : 'transparent',
                     },
                   ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Duración ${h} horas`}
                 >
-                  <Text
-                    style={[
-                      styles.hourPillText,
-                      { color: storyDuration === h ? colors.accent : colors.fg },
-                    ]}
-                  >
+                  <Text style={[styles.hourPillText, { color: storyDuration === h ? colors.accent : colors.fg }]}>
                     {h}h
                   </Text>
                 </Pressable>
               ))}
               <Pressable
                 onPress={addStory}
-                style={[styles.addStoryButton, { backgroundColor: colors.accent }]}
+                disabled={isStoryLoading}
+                style={[
+                  styles.addStoryButton,
+                  { backgroundColor: colors.accent, opacity: isStoryLoading ? 0.6 : 1 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Agregar historia"
               >
-                <Text style={styles.addStoryButtonText}>+ Agregar</Text>
+                {isStoryLoading ? (
+                  <ActivityIndicator color="#fff" size="small" style={{ transform: [{ scale: 0.7 }] }} />
+                ) : (
+                  <Text style={styles.addStoryButtonText}>+ Agregar</Text>
+                )}
               </Pressable>
             </View>
           </View>
 
+          {/* Estado de carga de story */}
+          {storyState === 'compressing' ? (
+            <View style={[styles.storyProgressBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <ActivityIndicator color={colors.accent} size="small" />
+              <Text style={[styles.storyProgressText, { color: colors.fg }]}>Comprimiendo imagen…</Text>
+            </View>
+          ) : storyState === 'uploading' ? (
+            <View style={[styles.storyProgressBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <ActivityIndicator color={colors.accent} size="small" />
+              <Text style={[styles.storyProgressText, { color: colors.fg }]}>Guardando historia…</Text>
+            </View>
+          ) : null}
+
           {stories.length === 0 ? (
             <Pressable
               onPress={addStory}
+              disabled={isStoryLoading}
               style={[
                 styles.storiesEmpty,
                 { backgroundColor: colors.card, borderColor: colors.border },
               ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Agregar historia de ${storyDuration} horas`}
             >
               <Ionicons name="images-outline" size={28} color={colors.fg} style={{ opacity: 0.25 }} />
               <Text style={[styles.storiesEmptyText, { color: colors.fg }]}>
@@ -530,7 +591,11 @@ export default function ProfileScreen() {
                   colors={colors}
                 />
               ))}
-              <AddStoryCard colors={colors} onPress={addStory} />
+              <AddStoryCard
+                colors={colors}
+                onPress={addStory}
+                isLoading={isStoryLoading}
+              />
             </ScrollView>
           )}
           <Text style={[styles.storyHint, { color: colors.fg }]}>
@@ -541,12 +606,7 @@ export default function ProfileScreen() {
         {/* IDIOMA NATIVO */}
         {pNative ? (
           <Section label="IDIOMA NATIVO" colors={colors}>
-            <View
-              style={[
-                styles.langCard,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
+            <View style={[styles.langCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={styles.langFlag}>{FLAGS[pNative] ?? '🌍'}</Text>
               <Text style={[styles.langName, { color: colors.fg }]}>
                 {LANG_NAMES[pNative] ?? pNative}
@@ -558,12 +618,7 @@ export default function ProfileScreen() {
         {/* APRENDIENDO */}
         <Section label="APRENDIENDO" colors={colors}>
           {learning.length === 0 ? (
-            <View
-              style={[
-                styles.emptyCard,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
+            <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.emptyText, { color: colors.fg }]}>
                 Elegí idiomas en el onboarding.
               </Text>
@@ -573,10 +628,7 @@ export default function ProfileScreen() {
               {learning.map((l, idx) => (
                 <View
                   key={`${l.lang}-${idx}`}
-                  style={[
-                    styles.langCard,
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                  ]}
+                  style={[styles.langCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                 >
                   <Text style={styles.langFlag}>{FLAGS[l.lang] ?? '🌍'}</Text>
                   <Text style={[styles.langName, { color: colors.fg, flex: 1 }]}>
@@ -606,10 +658,7 @@ export default function ProfileScreen() {
               {interests.slice(0, 20).map((x) => (
                 <View
                   key={x}
-                  style={[
-                    styles.tag,
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                  ]}
+                  style={[styles.tag, { backgroundColor: colors.card, borderColor: colors.border }]}
                 >
                   <Text style={[styles.tagText, { color: colors.fg }]}>{x}</Text>
                 </View>
@@ -630,38 +679,58 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
+  // Sync badge
+  syncBadge: {
+    position:          'absolute',
+    top:               Platform.OS === 'ios' ? 56 : 20,
+    right:             20,
+    zIndex:            99,
+    borderRadius:      99,
+    paddingHorizontal: 8,
+    paddingVertical:   3,
+  },
+  syncBadgeText: { color: '#fff', fontWeight: '900', fontSize: 11 },
+
   // Hero
   hero: {
-    paddingBottom:    32,
+    paddingBottom:     32,
     paddingHorizontal: 24,
-    alignItems:       'center',
+    alignItems:        'center',
     borderBottomWidth: 1,
   },
-  avatarWrapper: { position: 'relative' },
+  avatarWrapper:  { position: 'relative', marginBottom: 4 },
   avatar: {
-    width:        100,
-    height:       100,
-    borderRadius: 50,
-    borderWidth:  3,
-    overflow:     'hidden',
-    alignItems:   'center',
+    width:          100,
+    height:         100,
+    borderRadius:   50,
+    borderWidth:    3,
+    overflow:       'hidden',
+    alignItems:     'center',
     justifyContent: 'center',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius:  14,
-    elevation:    10,
+    shadowOffset:   { width: 0, height: 6 },
+    shadowOpacity:  0.3,
+    shadowRadius:   14,
+    elevation:      10,
   },
   avatarImage:    { width: 100, height: 100 },
   avatarInitials: { color: '#fff', fontSize: 36, fontWeight: '900' },
+  avatarOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems:      'center',
+    justifyContent:  'center',
+    gap:             4,
+  },
+  avatarOverlayText: { color: '#fff', fontSize: 9, fontWeight: '800' },
   cameraButton: {
-    position:     'absolute',
-    bottom:       2,
-    right:        2,
-    width:        30,
-    height:       30,
-    borderRadius: 15,
-    borderWidth:  2,
-    alignItems:   'center',
+    position:       'absolute',
+    bottom:         2,
+    right:          2,
+    width:          30,
+    height:         30,
+    borderRadius:   15,
+    borderWidth:    2,
+    alignItems:     'center',
     justifyContent: 'center',
   },
   heroName: {
@@ -670,11 +739,7 @@ const styles = StyleSheet.create({
     marginTop:  14,
     textAlign:  'center',
   },
-  heroUsername: {
-    fontWeight: '700',
-    marginTop:  3,
-    fontSize:   14,
-  },
+  heroUsername: { fontWeight: '700', marginTop: 3, fontSize: 14 },
   heroLocation: {
     flexDirection: 'row',
     alignItems:    'center',
@@ -683,29 +748,29 @@ const styles = StyleSheet.create({
   },
   heroLocationText: { opacity: 0.4, fontWeight: '600', fontSize: 13 },
   heroBio: {
-    opacity:         0.6,
-    fontWeight:      '500',
-    marginTop:       10,
-    textAlign:       'center',
-    lineHeight:      20,
-    fontSize:        14,
+    opacity:           0.6,
+    fontWeight:        '500',
+    marginTop:         10,
+    textAlign:         'center',
+    lineHeight:        20,
+    fontSize:          14,
     paddingHorizontal: 16,
   },
   editButton: {
-    marginTop:       20,
-    flexDirection:   'row',
-    gap:             6,
-    paddingVertical: 12,
+    marginTop:         20,
+    flexDirection:     'row',
+    gap:               6,
+    paddingVertical:   12,
     paddingHorizontal: 28,
-    borderRadius:    99,
-    alignItems:      'center',
+    borderRadius:      99,
+    alignItems:        'center',
   },
   editButtonText: { color: '#fff', fontWeight: '800', fontSize: 15 },
 
   // Contenido
   content: { padding: 20, gap: 24 },
 
-  // Section label
+  // Labels
   sectionLabel: { opacity: 0.4, fontWeight: '800', fontSize: 11, letterSpacing: 1.2 },
 
   // Stories
@@ -717,8 +782,8 @@ const styles = StyleSheet.create({
     borderRadius:      99,
     borderWidth:       1,
   },
-  hourPillText:     { fontWeight: '700', fontSize: 11 },
-  addStoryButton:   { borderRadius: 99, paddingHorizontal: 12, paddingVertical: 5, marginLeft: 2 },
+  hourPillText:       { fontWeight: '700', fontSize: 11 },
+  addStoryButton:     { borderRadius: 99, paddingHorizontal: 12, paddingVertical: 5, marginLeft: 2, minWidth: 70, alignItems: 'center' },
   addStoryButtonText: { color: '#fff', fontWeight: '800', fontSize: 11 },
   storiesEmpty: {
     borderWidth:   1,
@@ -730,27 +795,31 @@ const styles = StyleSheet.create({
   },
   storiesEmptyText: { opacity: 0.35, fontWeight: '600', fontSize: 13 },
   storyHint:        { opacity: 0.25, fontSize: 11 },
+  storyProgressBar: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    gap:            10,
+    borderWidth:    1,
+    borderRadius:   12,
+    padding:        12,
+  },
+  storyProgressText: { fontSize: 13, fontWeight: '600', opacity: 0.7 },
 
   // Story card
-  storyImage: {
-    width:        90,
-    height:       140,
-    borderRadius: 14,
-  },
+  storyImage: { width: 90, height: 140, borderRadius: 14 },
   storyBorder: {
     position:     'absolute',
-    top:          0,
-    left:         0,
+    top: 0, left: 0,
     width:        90,
     height:       140,
     borderRadius: 14,
     borderWidth:  2,
   },
   storyTimerWrapper: {
-    position:  'absolute',
-    bottom:    8,
-    left:      0,
-    right:     0,
+    position:   'absolute',
+    bottom:     8,
+    left:       0,
+    right:      0,
     alignItems: 'center',
   },
   storyTimerPill: {
@@ -770,6 +839,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap:            4,
   },
+  storyAddText: { opacity: 0.3, fontSize: 10, fontWeight: '700' },
 
   // Lang cards
   langCard: {
@@ -790,11 +860,7 @@ const styles = StyleSheet.create({
   levelBadgeText: { fontWeight: '800', fontSize: 12 },
 
   // Empty
-  emptyCard: {
-    borderWidth:  1,
-    borderRadius: 14,
-    padding:      16,
-  },
+  emptyCard: { borderWidth: 1, borderRadius: 14, padding: 16 },
   emptyText: { opacity: 0.35 },
 
   // Tags

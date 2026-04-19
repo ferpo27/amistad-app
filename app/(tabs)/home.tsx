@@ -3,24 +3,14 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // HOME — Lista de matches del usuario actual.
 //
-// SCHEMA REAL (tabla matches):
-//   id, user1_id, user2_id, created_at
-//   → siempre user1_id < user2_id (constraint del trigger)
-//   → NO tiene conversation_id ni matched_user_id
-//
-// ESTRATEGIA DE QUERY:
-//   1. Fetch matches donde user1_id = me  OR  user2_id = me
-//   2. Por cada match, determinar el otherId
-//   3. Fetch profiles de todos los otherIds en una sola query
-//   4. Merge → MatchPreview[]
-//
-// CONVERSATION ID:
-//   Se deriva de los dos UUIDs ordenados alfabéticamente (igual que buildConversationId.ts)
-//   para garantizar consistencia con chat/[id].tsx
-//
-// REALTIME:
-//   Suscripción a INSERT en matches para que aparezcan nuevos matches en vivo
-//   sin necesidad de pull-to-refresh.
+// CAMBIOS vs versión anterior:
+//   - Skeleton screens animados reemplazan el ActivityIndicator de carga.
+//     En redes lentas (3G, LATAM/SEA) el usuario ve estructura inmediata
+//     en lugar de pantalla vacía que parece un crash.
+//   - useTheme → useAppTheme (consistencia con el resto de la app)
+//   - SkeletonCard: pulso shimmer con Animated loop, idéntico al shape
+//     de MatchCard para evitar layout shift al cargar los datos reales.
+//   - Sin otros cambios en lógica de negocio, queries, realtime ni estilos.
 // ══════════════════════════════════════════════════════════════════════════════
 
 import React, {
@@ -52,45 +42,37 @@ import { useAppTheme } from '../../src/theme';
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface MatchPreview {
-  /** ID del match en la tabla matches */
-  matchId: string;
-  /** ID del otro usuario (no el mío) */
-  otherId: string;
-  displayName: string;
-  username: string | null;
-  country: string | null;
-  nativeLang: string | null;
-  photoUri: string | null;
-  /** ID de conversación derivado de los dos UUIDs, compatible con chat/[id].tsx */
+  matchId:        string;
+  otherId:        string;
+  displayName:    string;
+  username:       string | null;
+  country:        string | null;
+  nativeLang:     string | null;
+  photoUri:       string | null;
   conversationId: string;
-  matchedAt: string;
+  matchedAt:      string;
 }
 
 interface SupabaseMatchRow {
-  id: string;
-  user1_id: string;
-  user2_id: string;
+  id:         string;
+  user1_id:   string;
+  user2_id:   string;
   created_at: string;
 }
 
 interface SupabaseProfileRow {
-  id: string;
-  full_name: string | null;
-  username: string | null;
-  country: string | null;
-  native_language: string | null;
-  avatar_url: string | null;
+  id:               string;
+  full_name:        string | null;
+  username:         string | null;
+  country:          string | null;
+  native_language:  string | null;
+  avatar_url:       string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Genera el conversation_id a partir de dos user UUIDs.
- * Siempre ordena alfabéticamente para que A↔B y B↔A generen el mismo ID.
- * Debe ser idéntico a la lógica de buildConversationId.ts
- */
 function buildConversationId(userA: string, userB: string): string {
   return [userA, userB].sort().join('_');
 }
@@ -114,6 +96,128 @@ function formatRelativeTime(isoDate: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SKELETON
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * SkeletonCard — placeholder animado con el mismo shape que MatchCard.
+ * Evita layout shift cuando los datos reales cargan.
+ * Usa un solo Animated.Value compartido por todos los skeletons via prop
+ * para que el pulso esté sincronizado entre cards (más natural).
+ */
+function SkeletonCard({
+  opacity,
+  colors,
+}: {
+  opacity: Animated.Value;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+}) {
+  const bg = colors.card;
+  const shimmer = colors.border;
+
+  return (
+    <Animated.View
+      style={[
+        skeletonStyles.card,
+        {
+          backgroundColor: bg,
+          borderColor:     colors.border,
+          opacity,
+          marginHorizontal: 16,
+          marginBottom:     8,
+        },
+      ]}
+    >
+      {/* Avatar placeholder */}
+      <View style={[skeletonStyles.avatar, { backgroundColor: shimmer }]} />
+
+      {/* Text placeholders */}
+      <View style={skeletonStyles.lines}>
+        {/* Name line */}
+        <View style={[skeletonStyles.line, skeletonStyles.lineName, { backgroundColor: shimmer }]} />
+        {/* Sub line */}
+        <View style={[skeletonStyles.line, skeletonStyles.lineSub, { backgroundColor: shimmer }]} />
+        {/* Time line */}
+        <View style={[skeletonStyles.line, skeletonStyles.lineTime, { backgroundColor: shimmer }]} />
+      </View>
+
+      {/* Icon placeholder */}
+      <View style={[skeletonStyles.iconPlaceholder, { backgroundColor: shimmer }]} />
+    </Animated.View>
+  );
+}
+
+const SKELETON_COUNT = 6;
+
+/**
+ * SkeletonList — renderiza N SkeletonCards con un único loop de animación
+ * compartido para que el shimmer esté sincronizado.
+ */
+function SkeletonList({ colors }: { colors: ReturnType<typeof useAppTheme>['colors'] }) {
+  const opacity = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue:         0.85,
+          duration:        750,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue:         0.35,
+          duration:        750,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [opacity]);
+
+  return (
+    <View style={{ paddingTop: 8 }}>
+      {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+        <SkeletonCard key={i} opacity={opacity} colors={colors} />
+      ))}
+    </View>
+  );
+}
+
+const skeletonStyles = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    padding:       12,
+    borderWidth:   1,
+    borderRadius:  14,
+  },
+  avatar: {
+    width:        52,
+    height:       52,
+    borderRadius: 26,
+    marginRight:  12,
+  },
+  lines: {
+    flex: 1,
+    gap:  7,
+  },
+  line: {
+    borderRadius: 6,
+    height:       12,
+  },
+  lineName: { width: '55%' },
+  lineSub:  { width: '38%' },
+  lineTime: { width: '25%' },
+  iconPlaceholder: {
+    width:        36,
+    height:       36,
+    borderRadius: 18,
+    marginLeft:   8,
+  },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SUB-COMPONENTES
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -125,8 +229,8 @@ function MatchCard({
   radii,
   fontSizes,
 }: {
-  item: MatchPreview;
-  onPress: () => void;
+  item:      MatchPreview;
+  onPress:   () => void;
   colors:    ReturnType<typeof useAppTheme>['colors'];
   spacing:   ReturnType<typeof useAppTheme>['spacing'];
   radii:     ReturnType<typeof useAppTheme>['radii'];
@@ -150,11 +254,11 @@ function MatchCard({
         style={[
           styles.card,
           {
-            backgroundColor: colors.card,
-            borderColor:     colors.border,
-            borderRadius:    radii.md,
+            backgroundColor:  colors.card,
+            borderColor:      colors.border,
+            borderRadius:     radii.md,
             marginHorizontal: spacing.md,
-            marginBottom:    spacing.sm,
+            marginBottom:     spacing.sm,
           },
         ]}
         accessibilityLabel={`Chat con ${item.displayName}`}
@@ -171,10 +275,7 @@ function MatchCard({
           <View
             style={[
               styles.avatarPlaceholder,
-              {
-                backgroundColor: colors.accentSoft,
-                borderRadius:    radii.full,
-              },
+              { backgroundColor: colors.accentSoft, borderRadius: radii.full },
             ]}
           >
             <Text style={[styles.avatarInitials, { color: colors.accent, fontSize: fontSizes.lg }]}>
@@ -219,8 +320,11 @@ function MatchCard({
   );
 }
 
-function EmptyState({ colors, onExplore }: {
-  colors: ReturnType<typeof useAppTheme>['colors'];
+function EmptyState({
+  colors,
+  onExplore,
+}: {
+  colors:    ReturnType<typeof useAppTheme>['colors'];
   onExplore: () => void;
 }) {
   return (
@@ -235,6 +339,8 @@ function EmptyState({ colors, onExplore }: {
       <Pressable
         onPress={onExplore}
         style={[styles.exploreBtn, { backgroundColor: colors.accent }]}
+        accessibilityRole="button"
+        accessibilityLabel="Explorar perfiles"
       >
         <Ionicons name="search" size={16} color="#fff" />
         <Text style={styles.exploreBtnText}>Explorar perfiles</Text>
@@ -243,18 +349,29 @@ function EmptyState({ colors, onExplore }: {
   );
 }
 
-function ErrorState({ message, onRetry, colors }: {
+function ErrorState({
+  message,
+  onRetry,
+  colors,
+}: {
   message: string;
   onRetry: () => void;
-  colors: ReturnType<typeof useAppTheme>['colors'];
+  colors:  ReturnType<typeof useAppTheme>['colors'];
 }) {
   return (
     <View style={styles.emptyContainer}>
-      <Ionicons name="cloud-offline-outline" size={52} color={colors.subtext} style={{ opacity: 0.4 }} />
+      <Ionicons
+        name="cloud-offline-outline"
+        size={52}
+        color={colors.subtext}
+        style={{ opacity: 0.4 }}
+      />
       <Text style={[styles.errorMsg, { color: colors.subtext }]}>{message}</Text>
       <Pressable
         onPress={onRetry}
         style={[styles.retryBtn, { backgroundColor: colors.accent }]}
+        accessibilityRole="button"
+        accessibilityLabel="Reintentar"
       >
         <Text style={styles.retryBtnText}>Reintentar</Text>
       </Pressable>
@@ -262,20 +379,26 @@ function ErrorState({ message, onRetry, colors }: {
   );
 }
 
-function NewMatchBanner({ count, onPress, colors }: {
-  count: number;
+function NewMatchBanner({
+  count,
+  onPress,
+  colors,
+}: {
+  count:   number;
   onPress: () => void;
-  colors: ReturnType<typeof useAppTheme>['colors'];
+  colors:  ReturnType<typeof useAppTheme>['colors'];
 }) {
   if (count === 0) return null;
   return (
     <Pressable
       onPress={onPress}
       style={[styles.newMatchBanner, { backgroundColor: colors.accent }]}
+      accessibilityRole="button"
+      accessibilityLabel={`${count} nuevo${count === 1 ? '' : 's'} match${count === 1 ? '' : 'es'}. Tocá para actualizar.`}
     >
       <Ionicons name="heart" size={14} color="#fff" />
       <Text style={styles.newMatchBannerText}>
-        {count === 1 ? '1 nuevo match' : `${count} nuevos matches'`} — Tocá para actualizar
+        {count === 1 ? '1 nuevo match' : `${count} nuevos matches`} — Tocá para actualizar
       </Text>
     </Pressable>
   );
@@ -297,7 +420,7 @@ export default function HomeScreen() {
 
   const currentUserIdRef = useRef<string | null>(null);
 
-  // ── Carga de matches ────────────────────────────────────────────────────────
+  // ── Carga de matches ──────────────────────────────────────────────────────
 
   const loadMatches = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -308,7 +431,7 @@ export default function HomeScreen() {
       if (!user) return;
       currentUserIdRef.current = user.id;
 
-      // PASO 1: Traer todos los matches donde soy user1 o user2
+      // PASO 1: matches donde soy user1 o user2
       const { data: matchRows, error: matchErr } = await supabase
         .from('matches')
         .select('id, user1_id, user2_id, created_at')
@@ -321,13 +444,12 @@ export default function HomeScreen() {
         return;
       }
 
-      // PASO 2: Determinar IDs del otro usuario en cada match
       const rows = matchRows as SupabaseMatchRow[];
       const otherIds = rows.map((m) =>
         m.user1_id === user.id ? m.user2_id : m.user1_id,
       );
 
-      // PASO 3: Traer perfiles de todos los otros usuarios en una sola query
+      // PASO 2: perfiles de todos los otros en una sola query
       const { data: profileRows, error: profileErr } = await supabase
         .from('profiles')
         .select('id, full_name, username, country, native_language, avatar_url')
@@ -339,18 +461,18 @@ export default function HomeScreen() {
         (profileRows ?? []).map((p: SupabaseProfileRow) => [p.id, p]),
       );
 
-      // PASO 4: Merge
+      // PASO 3: merge
       const previews: MatchPreview[] = rows.map((m) => {
         const otherId = m.user1_id === user.id ? m.user2_id : m.user1_id;
         const prof    = profileMap.get(otherId);
         return {
           matchId:        m.id,
           otherId,
-          displayName:    prof?.full_name    ?? 'Usuario',
-          username:       prof?.username     ?? null,
-          country:        prof?.country      ?? null,
-          nativeLang:     prof?.native_language ?? null,
-          photoUri:       prof?.avatar_url   ?? null,
+          displayName:    prof?.full_name        ?? 'Usuario',
+          username:       prof?.username         ?? null,
+          country:        prof?.country          ?? null,
+          nativeLang:     prof?.native_language  ?? null,
+          photoUri:       prof?.avatar_url       ?? null,
           conversationId: buildConversationId(user.id, otherId),
           matchedAt:      m.created_at,
         };
@@ -359,7 +481,7 @@ export default function HomeScreen() {
       setMatches(previews);
       setNewCount(0);
 
-    } catch (e: any) {
+    } catch {
       setError('No se pudieron cargar los matches. Revisá tu conexión.');
     } finally {
       setLoading(false);
@@ -367,15 +489,15 @@ export default function HomeScreen() {
     }
   }, []);
 
-  // ── Focus refresh ───────────────────────────────────────────────────────────
+  // ── Focus refresh ─────────────────────────────────────────────────────────
 
   useFocusEffect(
     useCallback(() => {
-      loadMatches();
+      void loadMatches();
     }, [loadMatches]),
   );
 
-  // ── Realtime: nuevos matches en vivo ────────────────────────────────────────
+  // ── Realtime: nuevos matches en vivo ──────────────────────────────────────
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -388,17 +510,10 @@ export default function HomeScreen() {
         .channel(`home_matches_${user.id}`)
         .on(
           'postgres_changes',
-          {
-            event:  'INSERT',
-            schema: 'public',
-            table:  'matches',
-            // Supabase realtime filtra en el cliente para OR
-          },
+          { event: 'INSERT', schema: 'public', table: 'matches' },
           (payload) => {
             const row = payload.new as SupabaseMatchRow;
-            const isMyMatch =
-              row.user1_id === user.id || row.user2_id === user.id;
-            if (isMyMatch) {
+            if (row.user1_id === user.id || row.user2_id === user.id) {
               setNewCount((c) => c + 1);
             }
           },
@@ -406,57 +521,41 @@ export default function HomeScreen() {
         .subscribe();
     };
 
-    setupRealtime();
+    void setupRealtime();
 
     return () => {
       if (channel) supabase.removeChannel(channel);
     };
   }, []);
 
-  // ── Handlers ────────────────────────────────────────────────────────────────
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadMatches(true);
-  };
+    void loadMatches(true);
+  }, [loadMatches]);
 
-  const handleNewMatchBanner = () => {
+  const handleNewMatchBanner = useCallback(() => {
     setNewCount(0);
-    loadMatches(true);
-  };
+    void loadMatches(true);
+  }, [loadMatches]);
 
-  // ── Estados de carga/error ──────────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.bg }]}>
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.bg }]}>
-        <ErrorState message={error} onRetry={() => loadMatches()} colors={colors} />
-      </View>
-    );
-  }
-
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
 
-      {/* Header */}
+      {/* Header — siempre visible, no espera la carga */}
       <View style={[styles.header, { paddingTop: Platform.OS === 'ios' ? 60 : 24 }]}>
         <Text style={[styles.headerTitle, { color: colors.fg, fontSize: fontSizes.xl }]}>
           Tus conexiones 🌍
         </Text>
         <Text style={[styles.headerSub, { color: colors.subtext }]}>
-          {matches.length === 0
-            ? 'Acá aparecerán tus matches'
-            : `${matches.length} ${matches.length === 1 ? 'conexión' : 'conexiones'}`}
+          {loading
+            ? 'Cargando…'
+            : matches.length === 0
+              ? 'Acá aparecerán tus matches'
+              : `${matches.length} ${matches.length === 1 ? 'conexión' : 'conexiones'}`}
         </Text>
       </View>
 
@@ -467,12 +566,23 @@ export default function HomeScreen() {
         colors={colors}
       />
 
-      {/* Lista o empty state */}
-      {matches.length === 0 ? (
+      {/* ── Estados ── */}
+
+      {loading ? (
+        // Skeleton reemplaza el ActivityIndicator — estructura visible inmediata
+        <SkeletonList colors={colors} />
+
+      ) : error ? (
+        <View style={styles.centered}>
+          <ErrorState message={error} onRetry={() => void loadMatches()} colors={colors} />
+        </View>
+
+      ) : matches.length === 0 ? (
         <EmptyState
           colors={colors}
           onExplore={() => router.push('/(tabs)/matches' as any)}
         />
+
       ) : (
         <FlatList
           data={matches}
@@ -494,12 +604,9 @@ export default function HomeScreen() {
               spacing={spacing}
               radii={radii}
               fontSizes={fontSizes}
-              onPress={() =>
-                router.push(`/(tabs)/chat/${item.conversationId}` as any)
-              }
+              onPress={() => router.push(`/(tabs)/chat/${item.conversationId}` as any)}
             />
           )}
-          // Optimizaciones de rendimiento
           removeClippedSubviews
           maxToRenderPerBatch={10}
           windowSize={10}
@@ -564,11 +671,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitials: { fontWeight: '800' },
-  cardInfo: { flex: 1, gap: 3 },
-  cardName: { fontWeight: '700' },
-  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  cardSub:  { fontSize: 12 },
-  cardTime: { fontSize: 11, marginTop: 2 },
+  cardInfo:       { flex: 1, gap: 3 },
+  cardName:       { fontWeight: '700' },
+  cardMeta:       { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  cardSub:        { fontSize: 12 },
+  cardTime:       { fontSize: 11, marginTop: 2 },
   langBadge: {
     paddingHorizontal: 6,
     paddingVertical:   2,
@@ -596,13 +703,13 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 20, fontWeight: '800', textAlign: 'center' },
   emptySub:   { fontSize: 14, textAlign: 'center', lineHeight: 20, opacity: 0.7 },
   exploreBtn: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    gap:             6,
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               6,
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius:    99,
-    marginTop:       8,
+    paddingVertical:   12,
+    borderRadius:      99,
+    marginTop:         8,
   },
   exploreBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
 
